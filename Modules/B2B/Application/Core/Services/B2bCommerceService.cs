@@ -51,10 +51,25 @@ public sealed class B2bCommerceService : IB2bCommerceService
 
     public async Task<ApiResponse<PagedResponse<CatalogProductDto>>> GetCatalogProductsAsync(PagedRequest request, CancellationToken cancellationToken = default)
     {
+        return await GetCatalogProductsAsync(request, publishedOnly: false, cancellationToken);
+    }
+
+    public async Task<ApiResponse<PagedResponse<CatalogProductDto>>> GetPublicCatalogProductsAsync(PagedRequest request, CancellationToken cancellationToken = default)
+    {
+        return await GetCatalogProductsAsync(request, publishedOnly: true, cancellationToken);
+    }
+
+    private async Task<ApiResponse<PagedResponse<CatalogProductDto>>> GetCatalogProductsAsync(PagedRequest request, bool publishedOnly, CancellationToken cancellationToken)
+    {
         request ??= new PagedRequest();
         var query = _catalogProducts.Query()
             .Include(x => x.Variants.Where(v => !v.IsDeleted))
             .Where(x => !x.IsDeleted);
+
+        if (publishedOnly)
+        {
+            query = query.Where(x => x.IsPublished);
+        }
 
         if (!string.IsNullOrWhiteSpace(request.Search))
         {

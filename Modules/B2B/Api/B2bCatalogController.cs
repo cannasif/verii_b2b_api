@@ -34,6 +34,14 @@ public sealed class B2bCatalogController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
+    [HttpPost("public-paged")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ApiResponse<PagedResponse<CatalogProductDto>>>> GetPublicPaged([FromBody] PagedRequest request, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.GetPublicCatalogProductsAsync(request, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
     [HttpGet("{id:long}")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<CatalogProductDto>>> GetById(long id, CancellationToken cancellationToken = default)
