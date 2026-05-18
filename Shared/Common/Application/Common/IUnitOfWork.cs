@@ -1,8 +1,5 @@
 namespace Wms.Application.Common;
 
-/// <summary>
-/// Application katmanının transaction/commit bağımlılığı; `_old` SaveChanges davranışı parity için taşınır.
-/// </summary>
 public interface IUnitOfWork
 {
     Task<long> SaveChangesAsync(CancellationToken cancellationToken = default);

@@ -36,11 +36,11 @@ public sealed partial class NetsisQueryExecutor : INetsisQueryExecutor
         Func<SqlDataReader, T> map,
         CancellationToken cancellationToken = default)
     {
-        var connectionString = _configuration.GetConnectionString("DefaultConnection")
-            ?? _configuration.GetConnectionString("ErpConnection");
+        var connectionString = _configuration.GetConnectionString("ErpConnection")
+            ?? _configuration.GetConnectionString("DefaultConnection");
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            throw new InvalidOperationException("DefaultConnection is not configured.");
+            throw new InvalidOperationException("ErpConnection is not configured.");
         }
 
         var operation = NormalizeOperation(definition.Operation, definition.Sql);

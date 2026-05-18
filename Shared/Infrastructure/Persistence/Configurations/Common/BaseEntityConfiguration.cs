@@ -4,10 +4,6 @@ using Wms.Domain.Entities.Common;
 
 namespace Wms.Infrastructure.Persistence.Configurations.Common;
 
-/// <summary>
-/// Pragmatik dikey slice için ortak audit ve soft-delete kolonlarını tanımlar.
-/// `_old` yapıdaki kullanıcı navigation bağımlılıklarını bilerek taşımaz.
-/// </summary>
 public abstract class BaseEntityConfiguration<TEntity> : IEntityTypeConfiguration<TEntity>
     where TEntity : BaseEntity
 {

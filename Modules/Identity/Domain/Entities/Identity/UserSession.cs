@@ -2,9 +2,6 @@ using Wms.Domain.Entities.Common;
 
 namespace Wms.Domain.Entities.Identity;
 
-/// <summary>
-/// Aktif oturum takibi için `_old` UserSession davranışını taşır.
-/// </summary>
 public sealed class UserSession : BaseEntity
 {
     public long UserId { get; set; }

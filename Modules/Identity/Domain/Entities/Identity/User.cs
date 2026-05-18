@@ -2,9 +2,6 @@ using Wms.Domain.Entities.Common;
 
 namespace Wms.Domain.Entities.Identity;
 
-/// <summary>
-/// `_old` kullanıcı modelinin auth ve temel user management için gereken alanlarını taşır.
-/// </summary>
 public sealed class User : BaseEntity
 {
     public string Username { get; set; } = string.Empty;

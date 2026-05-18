@@ -1,6 +1,8 @@
 using AutoMapper;
 using FluentValidation;
 using FluentValidation.AspNetCore;
+using Hangfire;
+using Hangfire.SqlServer;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
@@ -17,6 +19,7 @@ using Wms.Application.Communications.Services;
 using Wms.Application.Customer.Services;
 using Wms.Application.Identity.Services;
 using Wms.Application.Stock.Services;
+using Wms.Application.System.Services;
 using Wms.Application.Warehouse.Services;
 using Wms.Application.YapKod.Services;
 using Wms.Infrastructure.Options;
@@ -30,6 +33,7 @@ using Wms.Infrastructure.Services.Erp;
 using Wms.Infrastructure.Services.Files;
 using Wms.Infrastructure.Services.Identity;
 using Wms.Infrastructure.Services.Integrations;
+using Wms.Infrastructure.Services.Jobs;
 using Wms.Infrastructure.Services.Localization;
 using Wms.Infrastructure.Services.Security;
 using Wms.Infrastructure.Services.Stock;
@@ -48,6 +52,7 @@ public static class ServiceCollectionExtensions
     public static IServiceCollection AddPragmaticWebApi(this IServiceCollection services, IConfiguration configuration)
     {
         services.Configure<SmtpOptions>(configuration.GetSection("Smtp"));
+        services.Configure<HangfireMonitoringOptions>(configuration.GetSection("HangfireMonitoring"));
         services.Configure<PragmaticCorsOptions>(configuration.GetSection("Cors"));
         services.AddNetsisIntegrationsModule(configuration);
 
@@ -77,6 +82,25 @@ public static class ServiceCollectionExtensions
             ?? "Server=(localdb)\\mssqllocaldb;Database=v3riib2b;Trusted_Connection=True;TrustServerCertificate=True;";
 
         services.AddDbContext<WmsDbContext>(options => options.UseSqlServer(connectionString));
+
+        services.AddHangfire(config => config
+            .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
+            .UseSimpleAssemblyNameTypeSerializer()
+            .UseRecommendedSerializerSettings()
+            .UseSqlServerStorage(connectionString, new SqlServerStorageOptions
+            {
+                PrepareSchemaIfNecessary = true,
+                CommandBatchMaxTimeout = TimeSpan.FromMinutes(5),
+                SlidingInvisibilityTimeout = TimeSpan.FromMinutes(5),
+                QueuePollInterval = TimeSpan.Zero,
+                UseRecommendedIsolationLevel = true,
+                DisableGlobalLocks = true
+            }));
+
+        services.AddHangfireServer(options =>
+        {
+            options.Queues = new[] { "default", "dead-letter" };
+        });
 
         var jwtSecret = configuration["Jwt:SecretKey"] ?? "YourSuperSecretKeyThatIsAtLeast32CharactersLong!";
         var jwtIssuer = configuration["Jwt:Issuer"] ?? "B2B_API";
@@ -112,6 +136,7 @@ public static class ServiceCollectionExtensions
         services.AddHttpClient();
         services.AddMemoryCache();
         services.AddDataProtection();
+        services.AddSingleton(TimeProvider.System);
         services.AddLocalization();
         services.Configure<RequestLocalizationOptions>(options =>
         {
@@ -161,9 +186,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ICurrentUserAccessor, HttpCurrentUserAccessor>();
         services.AddScoped<ICurrentUserService, CurrentUserServiceAdapter>();
         services.AddScoped<IRequestTraceAccessor, HttpRequestTraceAccessor>();
+        services.AddSingleton<IJobTraceContextAccessor, JobTraceContextAccessor>();
         services.AddScoped<IAuditLogWriter, AuditLogWriter>();
         services.AddScoped<IAuditSnapshotHelper, AuditSnapshotHelper>();
         services.AddScoped<IIntegrationLogWriter, IntegrationLogWriter>();
+        services.AddScoped<IJobFailureLogWriter, JobFailureLogWriter>();
+        services.AddScoped<IHangfireDeadLetterJob, HangfireDeadLetterJob>();
         services.AddScoped<IRequestCancellationAccessor, RequestCancellationAccessor>();
         services.AddScoped<IFileUploadService, FileUploadService>();
 
@@ -207,7 +235,12 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IB2bCommercialPolicyService, B2bCommercialPolicyService>();
         services.AddScoped<IB2bPricingAvailabilityResolver, B2bPricingAvailabilityResolver>();
         services.AddScoped<IB2bAccountService, B2bAccountService>();
+        services.AddScoped<IB2bPortalAccessService, B2bPortalAccessService>();
         services.AddScoped<IB2bInsightService, B2bInsightService>();
+
+        services.AddScoped<IJobService, JobService>();
+        services.AddScoped<ITraceExplorerService, TraceExplorerService>();
+        services.AddScoped<IHangfireManualSyncService, HangfireManualSyncService>();
 
         return services;
     }

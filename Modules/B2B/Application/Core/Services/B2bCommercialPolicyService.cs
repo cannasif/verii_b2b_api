@@ -186,22 +186,50 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
             return ApiResponse<QuoteRequestDto>.ErrorResult("Quote must include at least one line", statusCode: 400);
         }
 
+        var calculatedLines = dto.Lines.Select(CalculateQuoteLine).ToList();
+        var total = calculatedLines.Sum(x => x.lineTotal);
+        var grandTotal = calculatedLines.Sum(x => x.lineGrandTotal);
+        if (dto.GeneralDiscountRate is > 0)
+        {
+            var discount = Math.Round(grandTotal * dto.GeneralDiscountRate.Value / 100m, 4);
+            grandTotal -= discount;
+        }
+        if (dto.GeneralDiscountAmount is > 0)
+        {
+            grandTotal -= dto.GeneralDiscountAmount.Value;
+        }
+        grandTotal = Math.Max(0, grandTotal);
+
         var quote = new QuoteRequest
         {
-            QuoteNumber = $"Q-{DateTimeProvider.Now:yyyyMMddHHmmssfff}",
+            QuoteNumber = string.IsNullOrWhiteSpace(dto.OfferNo) ? $"Q-{DateTimeProvider.Now:yyyyMMddHHmmssfff}" : dto.OfferNo.Trim(),
             CustomerId = dto.CustomerId,
             UserId = dto.UserId,
             Status = B2bWorkflowStatuses.Submitted,
             CurrencyCode = NormalizeCurrency(dto.CurrencyCode),
+            OfferType = Trim(dto.OfferType),
+            OfferDate = dto.OfferDate ?? DateTimeProvider.Now,
+            OfferNo = Trim(dto.OfferNo),
+            RevisionNo = Trim(dto.RevisionNo),
+            RevisionId = dto.RevisionId,
+            ValidUntil = dto.ValidUntil,
+            DeliveryDate = dto.DeliveryDate,
+            DeliveryMethod = Trim(dto.DeliveryMethod),
+            PaymentTypeId = dto.PaymentTypeId,
+            ErpProjectCode = Trim(dto.ErpProjectCode),
+            GeneralDiscountRate = dto.GeneralDiscountRate,
+            GeneralDiscountAmount = dto.GeneralDiscountAmount,
             CustomerNote = dto.CustomerNote,
             SubmittedDate = DateTimeProvider.Now,
-            EstimatedTotal = dto.Lines.Sum(x => x.Quantity * (x.TargetUnitPrice ?? 0))
+            Total = total,
+            EstimatedTotal = grandTotal
         };
         await _quotes.AddAsync(quote, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
-        foreach (var line in dto.Lines)
+        foreach (var calculatedLine in calculatedLines)
         {
+            var line = calculatedLine.source;
             await _quoteLines.AddAsync(new QuoteRequestLine
             {
                 QuoteRequestId = quote.Id,
@@ -211,7 +239,25 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
                 RequestedSku = Trim(line.RequestedSku),
                 RequestedName = Trim(line.RequestedName),
                 Quantity = line.Quantity,
-                TargetUnitPrice = line.TargetUnitPrice
+                TargetUnitPrice = line.TargetUnitPrice,
+                DiscountRate1 = line.DiscountRate1,
+                DiscountAmount1 = line.DiscountAmount1,
+                DiscountRate2 = line.DiscountRate2,
+                DiscountAmount2 = line.DiscountAmount2,
+                DiscountRate3 = line.DiscountRate3,
+                DiscountAmount3 = line.DiscountAmount3,
+                VatRate = line.VatRate,
+                VatAmount = calculatedLine.vatAmount,
+                LineTotal = calculatedLine.lineTotal,
+                LineGrandTotal = calculatedLine.lineGrandTotal,
+                Description = Trim(line.Description),
+                Description1 = Trim(line.Description1),
+                Description2 = Trim(line.Description2),
+                Description3 = Trim(line.Description3),
+                PricingRuleHeaderId = line.PricingRuleHeaderId,
+                RelatedProductKey = Trim(line.RelatedProductKey),
+                IsMainRelatedProduct = line.IsMainRelatedProduct,
+                ErpProjectCode = Trim(line.ErpProjectCode) ?? Trim(dto.ErpProjectCode)
             }, cancellationToken);
         }
 
@@ -533,6 +579,19 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
         UserId = entity.UserId,
         Status = entity.Status,
         CurrencyCode = entity.CurrencyCode,
+        OfferType = entity.OfferType,
+        OfferDate = entity.OfferDate,
+        OfferNo = entity.OfferNo,
+        RevisionNo = entity.RevisionNo,
+        RevisionId = entity.RevisionId,
+        ValidUntil = entity.ValidUntil,
+        DeliveryDate = entity.DeliveryDate,
+        DeliveryMethod = entity.DeliveryMethod,
+        PaymentTypeId = entity.PaymentTypeId,
+        ErpProjectCode = entity.ErpProjectCode,
+        GeneralDiscountRate = entity.GeneralDiscountRate,
+        GeneralDiscountAmount = entity.GeneralDiscountAmount,
+        Total = entity.Total,
         EstimatedTotal = entity.EstimatedTotal,
         CustomerNote = entity.CustomerNote,
         SalesNote = entity.SalesNote,
@@ -555,8 +614,50 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
         RequestedName = entity.RequestedName,
         Quantity = entity.Quantity,
         TargetUnitPrice = entity.TargetUnitPrice,
-        ApprovedUnitPrice = entity.ApprovedUnitPrice
+        ApprovedUnitPrice = entity.ApprovedUnitPrice,
+        DiscountRate1 = entity.DiscountRate1,
+        DiscountAmount1 = entity.DiscountAmount1,
+        DiscountRate2 = entity.DiscountRate2,
+        DiscountAmount2 = entity.DiscountAmount2,
+        DiscountRate3 = entity.DiscountRate3,
+        DiscountAmount3 = entity.DiscountAmount3,
+        VatRate = entity.VatRate,
+        VatAmount = entity.VatAmount,
+        LineTotal = entity.LineTotal,
+        LineGrandTotal = entity.LineGrandTotal,
+        Description = entity.Description,
+        Description1 = entity.Description1,
+        Description2 = entity.Description2,
+        Description3 = entity.Description3,
+        PricingRuleHeaderId = entity.PricingRuleHeaderId,
+        RelatedProductKey = entity.RelatedProductKey,
+        IsMainRelatedProduct = entity.IsMainRelatedProduct,
+        ErpProjectCode = entity.ErpProjectCode
     };
+
+    private static (CreateQuoteRequestLineDto source, decimal lineTotal, decimal vatAmount, decimal lineGrandTotal) CalculateQuoteLine(CreateQuoteRequestLineDto line)
+    {
+        var gross = Math.Max(0, line.Quantity) * Math.Max(0, line.TargetUnitPrice ?? 0);
+        var afterDiscount1 = ApplyDiscount(gross, line.DiscountRate1, line.DiscountAmount1);
+        var afterDiscount2 = ApplyDiscount(afterDiscount1, line.DiscountRate2, line.DiscountAmount2);
+        var lineTotal = ApplyDiscount(afterDiscount2, line.DiscountRate3, line.DiscountAmount3);
+        var vatAmount = Math.Round(lineTotal * Math.Max(0, line.VatRate) / 100m, 4);
+        return (line, lineTotal, vatAmount, lineTotal + vatAmount);
+    }
+
+    private static decimal ApplyDiscount(decimal amount, decimal rate, decimal fixedAmount)
+    {
+        var discounted = amount;
+        if (rate > 0)
+        {
+            discounted -= Math.Round(discounted * rate / 100m, 4);
+        }
+        if (fixedAmount > 0)
+        {
+            discounted -= fixedAmount;
+        }
+        return Math.Max(0, discounted);
+    }
 
     private static B2bIntegrationEventDto MapIntegrationEvent(B2bIntegrationEvent entity) => new()
     {

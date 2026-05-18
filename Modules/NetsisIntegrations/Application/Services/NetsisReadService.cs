@@ -47,4 +47,47 @@ public sealed class NetsisReadService : INetsisReadService
             return ApiResponse<List<BranchDto>>.ErrorResult(message, ex.Message, 500);
         }
     }
+
+    public async Task<ApiResponse<List<KurDto>>> GetExchangeRatesAsync(DateTime date, int pricingType, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var rows = await _netsisQueryExecutor.QueryAsync(
+                new NetsisQueryDefinition(
+                    "RII_FN_KUR",
+                    "SELECT * FROM dbo.RII_FN_KUR(@tarih, @fiyatTipi)",
+                    "NetsisReadService.GetExchangeRatesAsync",
+                    new[]
+                    {
+                        new SqlParameter("@tarih", date.Date),
+                        new SqlParameter("@fiyatTipi", pricingType)
+                    }),
+                reader => new KurDto
+                {
+                    DovizTipi = GetNullableValue<int>(reader, "DOVIZ_TIPI") ?? 0,
+                    DovizIsmi = GetNullableString(reader, "DOVIZ_ISMI"),
+                    KurDegeri = GetNullableValue<double>(reader, "KUR_DEGERI")
+                },
+                cancellationToken);
+
+            return ApiResponse<List<KurDto>>.SuccessResult(rows, _localizationService.GetLocalizedString("OperationSuccessful"));
+        }
+        catch (Exception ex)
+        {
+            var message = _localizationService.GetLocalizedString("ExchangeRatesRetrievalError", ex.Message);
+            return ApiResponse<List<KurDto>>.ErrorResult(message, ex.Message, 500);
+        }
+    }
+
+    private static string? GetNullableString(SqlDataReader reader, string columnName)
+    {
+        var ordinal = reader.GetOrdinal(columnName);
+        return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+    }
+
+    private static T? GetNullableValue<T>(SqlDataReader reader, string columnName) where T : struct
+    {
+        var ordinal = reader.GetOrdinal(columnName);
+        return reader.IsDBNull(ordinal) ? null : reader.GetFieldValue<T>(ordinal);
+    }
 }

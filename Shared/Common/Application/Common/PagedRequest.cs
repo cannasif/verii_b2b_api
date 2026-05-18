@@ -1,8 +1,5 @@
 namespace Wms.Application.Common;
 
-/// <summary>
-/// `_old/reference/verii_wms_api.Application/DTOs/Common/PagedRequest.cs` paging/filter/search kontratını korur.
-/// </summary>
 public sealed class Filter
 {
     public string Column { get; set; } = string.Empty;

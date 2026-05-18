@@ -13,10 +13,6 @@ using Wms.WebApi.Telemetry;
 
 namespace Wms.Application.Identity.Services;
 
-/// <summary>
-/// `_old` AuthService davranışının pragmatik ilk batch karşılığıdır.
-/// AccessControl bağımlılıkları sonraki modülde tamamlanacak şekilde sadeleştirilmiştir.
-/// </summary>
 public sealed class AuthService : IAuthService
 {
     private readonly IRepository<User> _users;

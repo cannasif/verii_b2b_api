@@ -3,9 +3,6 @@ using Wms.Domain.Entities.Common;
 
 namespace Wms.Application.Common;
 
-/// <summary>
-/// Application katmanının veri erişim bağımlılığı; `_old` generic repository davranışını application sınırına taşır.
-/// </summary>
 public interface IRepository<TEntity> where TEntity : BaseEntity
 {
     IQueryable<TEntity> Query(bool tracking = false, bool ignoreQueryFilters = false);

@@ -46,13 +46,25 @@ public sealed class B2bAccountService : IB2bAccountService
 
     public async Task<ApiResponse<B2bCompanyDto>> CreateCompanyAsync(CreateB2bCompanyDto dto, CancellationToken cancellationToken = default)
     {
-        var code = Normalize(dto.CompanyCode);
+        if (!dto.CustomerId.HasValue || dto.CustomerId.Value <= 0)
+        {
+            return ApiResponse<B2bCompanyDto>.ErrorResult("ERP cari seçin.", statusCode: 400);
+        }
+
+        var code = string.IsNullOrWhiteSpace(dto.CompanyCode)
+            ? $"CARI-{dto.CustomerId.Value}"
+            : Normalize(dto.CompanyCode);
+        var name = string.IsNullOrWhiteSpace(dto.CompanyName)
+            ? code
+            : dto.CompanyName.Trim();
         var exists = await _companies.Query().AnyAsync(x => x.CompanyCode == code && !x.IsDeleted, cancellationToken);
         if (exists) return ApiResponse<B2bCompanyDto>.ErrorResult("Company code already exists", statusCode: 400);
+        var customerLinked = await _companies.Query().AnyAsync(x => x.CustomerId == dto.CustomerId.Value && !x.IsDeleted, cancellationToken);
+        if (customerLinked) return ApiResponse<B2bCompanyDto>.ErrorResult("Bu ERP cari zaten bir B2B şirket hesabına bağlı.", statusCode: 400);
         var company = new B2bCompany
         {
             CompanyCode = code,
-            CompanyName = dto.CompanyName.Trim(),
+            CompanyName = name,
             CustomerId = dto.CustomerId,
             ParentCompanyId = dto.ParentCompanyId,
             CustomerGroupCode = Trim(dto.CustomerGroupCode),

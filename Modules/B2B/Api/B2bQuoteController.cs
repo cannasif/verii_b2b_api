@@ -12,10 +12,12 @@ namespace Wms.WebApi.Controllers.B2B;
 public sealed class B2bQuoteController : ControllerBase
 {
     private readonly IB2bCommercialPolicyService _service;
+    private readonly IB2bPortalAccessService _portalAccess;
 
-    public B2bQuoteController(IB2bCommercialPolicyService service)
+    public B2bQuoteController(IB2bCommercialPolicyService service, IB2bPortalAccessService portalAccess)
     {
         _service = service;
+        _portalAccess = portalAccess;
     }
 
     [HttpPost("paged")]
@@ -26,8 +28,15 @@ public sealed class B2bQuoteController : ControllerBase
     }
 
     [HttpPost]
+    [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<QuoteRequestDto>>> Create([FromBody] CreateQuoteRequestDto dto, CancellationToken cancellationToken = default)
     {
+        var validation = await _portalAccess.ValidateCustomerAccessAsync(Request, dto.CustomerId, cancellationToken);
+        if (!validation.Success)
+        {
+            return StatusCode(validation.StatusCode, ApiResponse<QuoteRequestDto>.ErrorResult(validation.Message, validation.ExceptionMessage, validation.StatusCode));
+        }
+
         var result = await _service.CreateQuoteAsync(dto, cancellationToken);
         return StatusCode(result.StatusCode, result);
     }

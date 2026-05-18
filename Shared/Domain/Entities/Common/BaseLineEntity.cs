@@ -2,9 +2,6 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Wms.Domain.Entities.Common;
 
-/// <summary>
-/// `_old/reference/verii_wms_api.Domain/Entities/Common/BaseLineEntity.cs` satır tabanı davranışını taşır.
-/// </summary>
 public abstract class BaseLineEntity : BaseEntity
 {
     [NotMapped]

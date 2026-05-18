@@ -2,10 +2,6 @@ using System.Linq.Expressions;
 
 namespace Wms.Application.Common;
 
-/// <summary>
-/// `_old` HelperExtensions içindeki filter/sort/pagination davranışının pragmatik çekirdeği.
-/// Definitions batch'inde ihtiyaç duyulan kadar taşınır.
-/// </summary>
 public static class QueryableExtensions
 {
     public static IQueryable<T> ApplySearch<T>(this IQueryable<T> query, string? search, params string[] searchableColumns)

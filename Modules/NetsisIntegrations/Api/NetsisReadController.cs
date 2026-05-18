@@ -27,4 +27,15 @@ public sealed class NetsisReadController : ControllerBase
         var result = await _service.GetBranchesAsync(branchNo, cancellationToken);
         return StatusCode(result.StatusCode, result);
     }
+
+    [HttpGet("getExchangeRate")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ApiResponse<List<KurDto>>>> GetExchangeRate(
+        [FromQuery] DateTime? tarih = null,
+        [FromQuery] int fiyatTipi = 1,
+        CancellationToken cancellationToken = default)
+    {
+        var result = await _service.GetExchangeRatesAsync(tarih ?? DateTime.Today, fiyatTipi, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
 }

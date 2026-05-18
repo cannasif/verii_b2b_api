@@ -4,10 +4,6 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Wms.Infrastructure.Persistence.UnitOfWork;
 
-/// <summary>
-/// İlk pragmatik batch için commit sınırını DbContext üstünden taşır.
-/// Repository property şişmesi yerine application katmanını sade tutar.
-/// </summary>
 public sealed class UnitOfWork : IUnitOfWork
 {
     private readonly WmsDbContext _context;

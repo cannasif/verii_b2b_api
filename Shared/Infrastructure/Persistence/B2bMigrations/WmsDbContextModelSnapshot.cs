@@ -939,9 +939,32 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                     b.Property<DateTime?>("DeletedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeliveryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeliveryMethod")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("ErpProjectCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<string>("ExternalErpOrderNumber")
                         .HasMaxLength(80)
                         .HasColumnType("nvarchar(80)");
+
+                    b.Property<decimal?>("GeneralDiscountAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("GeneralDiscountRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<decimal>("GrandTotal")
                         .HasPrecision(18, 4)
@@ -952,10 +975,35 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<DateTime?>("OfferDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("OfferNo")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("OfferType")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
                     b.Property<string>("OrderNumber")
                         .IsRequired()
                         .HasMaxLength(60)
                         .HasColumnType("nvarchar(60)");
+
+                    b.Property<long?>("PaymentTypeId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("QuoteRequestId")
+                        .HasColumnType("bigint")
+                        .HasColumnName("QuotationId");
+
+                    b.Property<long?>("RevisionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RevisionNo")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<string>("Status")
                         .IsRequired()
@@ -982,12 +1030,24 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                     b.Property<long?>("UserId")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTime?>("ValidUntil")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("OfferDate")
+                        .HasDatabaseName("IX_B2B_Order_OfferDate");
+
+                    b.HasIndex("OfferNo")
+                        .HasDatabaseName("IX_B2B_Order_OfferNo");
 
                     b.HasIndex("OrderNumber")
                         .IsUnique()
                         .HasDatabaseName("IX_B2B_Order_OrderNumber")
                         .HasFilter("[IsDeleted] = 0");
+
+                    b.HasIndex("QuoteRequestId")
+                        .HasDatabaseName("IX_B2B_Order_QuotationId");
 
                     b.HasIndex("CustomerId", "Status")
                         .HasDatabaseName("IX_B2B_Order_CustomerStatus");
@@ -1028,6 +1088,50 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                     b.Property<DateTime?>("DeletedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Description1")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Description2")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Description3")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("DiscountAmount1")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DiscountAmount2")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DiscountAmount3")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DiscountRate1")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DiscountRate2")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DiscountRate3")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("ErpProjectCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<long?>("ErpStockId")
                         .HasColumnType("bigint");
 
@@ -1036,11 +1140,21 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("IsMainRelatedProduct")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("LineGrandTotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<decimal>("LineTotal")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<long>("OrderId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("PricingRuleHeaderId")
                         .HasColumnType("bigint");
 
                     b.Property<string>("ProductName")
@@ -1055,6 +1169,10 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
+                    b.Property<string>("RelatedProductKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
                     b.Property<decimal>("UnitPrice")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
@@ -1064,6 +1182,14 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
 
                     b.Property<DateTime?>("UpdatedDate")
                         .HasColumnType("datetime2");
+
+                    b.Property<decimal>("VatAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("VatRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
 
                     b.Property<int?>("WarehouseCode")
                         .HasColumnType("int");
@@ -1886,7 +2012,26 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                     b.Property<DateTime?>("DeletedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<DateTime?>("DeliveryDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("DeliveryMethod")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
+
+                    b.Property<string>("ErpProjectCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<decimal>("EstimatedTotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("GeneralDiscountAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal?>("GeneralDiscountRate")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
@@ -1895,10 +2040,31 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<DateTime?>("OfferDate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("OfferNo")
+                        .HasMaxLength(60)
+                        .HasColumnType("nvarchar(60)");
+
+                    b.Property<string>("OfferType")
+                        .HasMaxLength(40)
+                        .HasColumnType("nvarchar(40)");
+
+                    b.Property<long?>("PaymentTypeId")
+                        .HasColumnType("bigint");
+
                     b.Property<string>("QuoteNumber")
                         .IsRequired()
                         .HasMaxLength(60)
                         .HasColumnType("nvarchar(60)");
+
+                    b.Property<long?>("RevisionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("RevisionNo")
+                        .HasMaxLength(30)
+                        .HasColumnType("nvarchar(30)");
 
                     b.Property<string>("SalesNote")
                         .HasMaxLength(1000)
@@ -1912,6 +2078,10 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                     b.Property<DateTime?>("SubmittedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("Total")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
                     b.Property<long?>("UpdatedBy")
                         .HasColumnType("bigint");
 
@@ -1921,17 +2091,26 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                     b.Property<long?>("UserId")
                         .HasColumnType("bigint");
 
+                    b.Property<DateTime?>("ValidUntil")
+                        .HasColumnType("datetime2");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("OfferDate")
+                        .HasDatabaseName("IX_B2B_Quotation_OfferDate");
+
+                    b.HasIndex("OfferNo")
+                        .HasDatabaseName("IX_B2B_Quotation_OfferNo");
 
                     b.HasIndex("QuoteNumber")
                         .IsUnique()
-                        .HasDatabaseName("IX_B2B_Quote_QuoteNumber")
+                        .HasDatabaseName("IX_B2B_Quotation_QuoteNumber")
                         .HasFilter("[IsDeleted] = 0");
 
                     b.HasIndex("CustomerId", "Status")
-                        .HasDatabaseName("IX_B2B_Quote_CustomerStatus");
+                        .HasDatabaseName("IX_B2B_Quotation_CustomerStatus");
 
-                    b.ToTable("RII_B2B_QUOTE_REQUEST", (string)null);
+                    b.ToTable("RII_B2B_QUOTATION", (string)null);
                 });
 
             modelBuilder.Entity("Wms.Domain.Entities.B2B.QuoteRequestLine", b =>
@@ -1971,6 +2150,50 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                     b.Property<DateTime?>("DeletedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<string>("Description1")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Description2")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("Description3")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("DiscountAmount1")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DiscountAmount2")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DiscountAmount3")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DiscountRate1")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DiscountRate2")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("DiscountRate3")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<string>("ErpProjectCode")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
                     b.Property<long?>("ErpStockId")
                         .HasColumnType("bigint");
 
@@ -1979,12 +2202,31 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                         .HasColumnType("bit")
                         .HasDefaultValue(false);
 
+                    b.Property<bool>("IsMainRelatedProduct")
+                        .HasColumnType("bit");
+
+                    b.Property<decimal>("LineGrandTotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("LineTotal")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<long?>("PricingRuleHeaderId")
+                        .HasColumnType("bigint");
+
                     b.Property<decimal>("Quantity")
                         .HasPrecision(18, 4)
                         .HasColumnType("decimal(18,4)");
 
                     b.Property<long>("QuoteRequestId")
-                        .HasColumnType("bigint");
+                        .HasColumnType("bigint")
+                        .HasColumnName("QuotationId");
+
+                    b.Property<string>("RelatedProductKey")
+                        .HasMaxLength(120)
+                        .HasColumnType("nvarchar(120)");
 
                     b.Property<string>("RequestedName")
                         .HasMaxLength(250)
@@ -2004,12 +2246,20 @@ namespace Wms.Shared.Infrastructure.Persistence.B2bMigrations
                     b.Property<DateTime?>("UpdatedDate")
                         .HasColumnType("datetime2");
 
+                    b.Property<decimal>("VatAmount")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
+                    b.Property<decimal>("VatRate")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("decimal(18,4)");
+
                     b.HasKey("Id");
 
                     b.HasIndex("QuoteRequestId")
-                        .HasDatabaseName("IX_B2B_QuoteLine_QuoteId");
+                        .HasDatabaseName("IX_B2B_QuotationLine_QuotationId");
 
-                    b.ToTable("RII_B2B_QUOTE_REQUEST_LINE", (string)null);
+                    b.ToTable("RII_B2B_QUOTATION_LINE", (string)null);
                 });
 
             modelBuilder.Entity("Wms.Domain.Entities.B2B.ShoppingList", b =>

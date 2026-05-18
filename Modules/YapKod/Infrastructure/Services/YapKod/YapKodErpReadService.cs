@@ -27,11 +27,11 @@ public sealed class YapKodErpReadService : IYapKodErpReadService
 
     public async Task<List<FnYapKodRow>> GetAllAsync(CancellationToken cancellationToken = default)
     {
-        var connectionString = _configuration.GetConnectionString("DefaultConnection")
-            ?? _configuration.GetConnectionString("ErpConnection");
+        var connectionString = _configuration.GetConnectionString("ErpConnection")
+            ?? _configuration.GetConnectionString("DefaultConnection");
         if (string.IsNullOrWhiteSpace(connectionString))
         {
-            throw new InvalidOperationException("DefaultConnection is not configured.");
+            throw new InvalidOperationException("ErpConnection is not configured.");
         }
 
         var result = new List<FnYapKodRow>();

@@ -31,6 +31,7 @@ public sealed class WmsDbContext : DbContext
     public DbSet<WmsScopePolicy> WmsScopePolicies => Set<WmsScopePolicy>();
     public DbSet<UserWmsScopePolicy> UserWmsScopePolicies => Set<UserWmsScopePolicy>();
     public DbSet<SmtpSetting> SmtpSettings => Set<SmtpSetting>();
+    public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<Customer> Customers => Set<Customer>();
     public DbSet<Stock> Stocks => Set<Stock>();
     public DbSet<StockDetail> StockDetails => Set<StockDetail>();
@@ -60,6 +61,8 @@ public sealed class WmsDbContext : DbContext
     public DbSet<PurchaseApprovalRule> PurchaseApprovalRules => Set<PurchaseApprovalRule>();
     public DbSet<WmsAuditLog> WmsAuditLogs => Set<WmsAuditLog>();
     public DbSet<WmsIntegrationLog> WmsIntegrationLogs => Set<WmsIntegrationLog>();
+    public DbSet<JobFailureLog> JobFailureLogs => Set<JobFailureLog>();
+    public DbSet<JobExecutionLog> JobExecutionLogs => Set<JobExecutionLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

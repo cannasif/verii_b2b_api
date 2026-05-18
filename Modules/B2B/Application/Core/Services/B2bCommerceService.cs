@@ -506,16 +506,39 @@ public sealed class B2bCommerceService : IB2bCommerceService
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             var subtotal = cart.Lines.Sum(x => x.Quantity * x.UnitPrice);
+            if (dto.GeneralDiscountRate is > 0)
+            {
+                subtotal -= Math.Round(subtotal * dto.GeneralDiscountRate.Value / 100m, 4);
+            }
+            if (dto.GeneralDiscountAmount is > 0)
+            {
+                subtotal -= dto.GeneralDiscountAmount.Value;
+            }
+            subtotal = Math.Max(0, subtotal);
             var order = new B2bOrder
             {
-                OrderNumber = $"B2B-{DateTimeProvider.Now:yyyyMMddHHmmssfff}",
+                OrderNumber = string.IsNullOrWhiteSpace(dto.OfferNo) ? $"B2B-{DateTimeProvider.Now:yyyyMMddHHmmssfff}" : dto.OfferNo.Trim(),
                 CustomerId = cart.CustomerId,
                 UserId = cart.UserId,
                 Status = B2bWorkflowStatuses.WaitingPayment,
                 CurrencyCode = cart.CurrencyCode,
+                OfferType = Trim(dto.OfferType),
+                OfferDate = dto.OfferDate ?? DateTimeProvider.Now,
+                OfferNo = Trim(dto.OfferNo),
+                RevisionNo = Trim(dto.RevisionNo),
+                RevisionId = dto.RevisionId,
+                ValidUntil = dto.ValidUntil,
+                DeliveryDate = dto.DeliveryDate,
+                DeliveryMethod = Trim(dto.DeliveryMethod),
+                PaymentTypeId = dto.PaymentTypeId,
+                QuoteRequestId = dto.QuoteRequestId,
+                ErpProjectCode = Trim(dto.ErpProjectCode),
+                GeneralDiscountRate = dto.GeneralDiscountRate,
+                GeneralDiscountAmount = dto.GeneralDiscountAmount,
                 Subtotal = subtotal,
                 TaxTotal = dto.TaxTotal,
                 GrandTotal = subtotal + dto.TaxTotal,
+                Description = Trim(dto.Description),
                 SubmittedDate = DateTimeProvider.Now
             };
             await _orders.AddAsync(order, cancellationToken);
@@ -532,7 +555,9 @@ public sealed class B2bCommerceService : IB2bCommerceService
                     WarehouseCode = line.WarehouseCode,
                     Quantity = line.Quantity,
                     UnitPrice = line.UnitPrice,
-                    LineTotal = line.Quantity * line.UnitPrice
+                    ErpProjectCode = Trim(dto.ErpProjectCode),
+                    LineTotal = line.Quantity * line.UnitPrice,
+                    LineGrandTotal = line.Quantity * line.UnitPrice
                 }, cancellationToken);
             }
 
@@ -877,9 +902,23 @@ public sealed class B2bCommerceService : IB2bCommerceService
         UserId = entity.UserId,
         Status = entity.Status,
         CurrencyCode = entity.CurrencyCode,
+        OfferType = entity.OfferType,
+        OfferDate = entity.OfferDate,
+        OfferNo = entity.OfferNo,
+        RevisionNo = entity.RevisionNo,
+        RevisionId = entity.RevisionId,
+        ValidUntil = entity.ValidUntil,
+        DeliveryDate = entity.DeliveryDate,
+        DeliveryMethod = entity.DeliveryMethod,
+        PaymentTypeId = entity.PaymentTypeId,
+        QuoteRequestId = entity.QuoteRequestId,
+        ErpProjectCode = entity.ErpProjectCode,
+        GeneralDiscountRate = entity.GeneralDiscountRate,
+        GeneralDiscountAmount = entity.GeneralDiscountAmount,
         Subtotal = entity.Subtotal,
         TaxTotal = entity.TaxTotal,
         GrandTotal = entity.GrandTotal,
+        Description = entity.Description,
         ExternalErpOrderNumber = entity.ExternalErpOrderNumber,
         SubmittedDate = entity.SubmittedDate,
         Lines = entity.Lines.Where(x => !x.IsDeleted).Select(MapOrderLine).ToList()
@@ -900,7 +939,24 @@ public sealed class B2bCommerceService : IB2bCommerceService
         ProductName = entity.ProductName,
         Quantity = entity.Quantity,
         UnitPrice = entity.UnitPrice,
-        LineTotal = entity.LineTotal
+        DiscountRate1 = entity.DiscountRate1,
+        DiscountAmount1 = entity.DiscountAmount1,
+        DiscountRate2 = entity.DiscountRate2,
+        DiscountAmount2 = entity.DiscountAmount2,
+        DiscountRate3 = entity.DiscountRate3,
+        DiscountAmount3 = entity.DiscountAmount3,
+        VatRate = entity.VatRate,
+        VatAmount = entity.VatAmount,
+        LineTotal = entity.LineTotal,
+        LineGrandTotal = entity.LineGrandTotal,
+        Description = entity.Description,
+        Description1 = entity.Description1,
+        Description2 = entity.Description2,
+        Description3 = entity.Description3,
+        PricingRuleHeaderId = entity.PricingRuleHeaderId,
+        RelatedProductKey = entity.RelatedProductKey,
+        IsMainRelatedProduct = entity.IsMainRelatedProduct,
+        ErpProjectCode = entity.ErpProjectCode
     };
 
     private static PaymentTransactionDto MapPayment(PaymentTransaction entity) => new()

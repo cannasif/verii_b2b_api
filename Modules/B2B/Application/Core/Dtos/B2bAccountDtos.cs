@@ -17,13 +17,25 @@ public sealed class B2bCompanyDto : BaseEntityDto
 
 public sealed class CreateB2bCompanyDto
 {
-    [Required, StringLength(80)] public string CompanyCode { get; set; } = string.Empty;
-    [Required, StringLength(220)] public string CompanyName { get; set; } = string.Empty;
+    [StringLength(80)] public string? CompanyCode { get; set; }
+    [StringLength(220)] public string? CompanyName { get; set; }
     public long? CustomerId { get; set; }
     public long? ParentCompanyId { get; set; }
     [StringLength(80)] public string? CustomerGroupCode { get; set; }
     public decimal? CreditLimit { get; set; }
     [StringLength(3)] public string CurrencyCode { get; set; } = "TRY";
+}
+
+public sealed class CreateB2bPortalSessionDto
+{
+    [Required, StringLength(80)] public string CompanyCode { get; set; } = string.Empty;
+}
+
+public sealed class B2bPortalSessionDto
+{
+    public string Token { get; set; } = string.Empty;
+    public DateTime ExpiresAt { get; set; }
+    public B2bCompanyDto Company { get; set; } = new();
 }
 
 public sealed class B2bBuyerDto : BaseEntityDto

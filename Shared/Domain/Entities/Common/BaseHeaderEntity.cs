@@ -2,9 +2,6 @@ using Wms.Domain.Common;
 
 namespace Wms.Domain.Entities.Common;
 
-/// <summary>
-/// `_old/reference/verii_wms_api.Domain/Entities/Common/BaseHeaderEntity.cs` içindeki doküman ve approval davranışını korur.
-/// </summary>
 public abstract class BaseHeaderEntity : BaseEntity
 {
     public string? DocumentNo { get; set; }

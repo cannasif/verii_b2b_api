@@ -6,4 +6,5 @@ namespace Wms.Modules.NetsisIntegrations.Application.Services;
 public interface INetsisReadService
 {
     Task<ApiResponse<List<BranchDto>>> GetBranchesAsync(int? branchNo = null, CancellationToken cancellationToken = default);
+    Task<ApiResponse<List<KurDto>>> GetExchangeRatesAsync(DateTime date, int pricingType, CancellationToken cancellationToken = default);
 }

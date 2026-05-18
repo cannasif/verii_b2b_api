@@ -7,10 +7,6 @@ using Wms.Infrastructure.Persistence.Context;
 
 namespace Wms.Infrastructure.Persistence.Repositories;
 
-/// <summary>
-/// `_old` generic repository yüzeyini pragmatik DbContext üzerinde gerçekler.
-/// İlk aşamada parameter vertical slice için gereken davranışları taşır.
-/// </summary>
 public sealed class GenericRepository<TEntity> : IGenericRepository<TEntity>
     where TEntity : BaseEntity
 {

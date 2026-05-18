@@ -3,9 +3,6 @@ using Wms.Application.Identity.Dtos;
 
 namespace Wms.Application.Identity.Services;
 
-/// <summary>
-/// `_old` auth use-case yüzeyinin pragmatik karşılığıdır.
-/// </summary>
 public interface IAuthService
 {
     Task<ApiResponse<UserDto>> GetUserByIdAsync(long id, CancellationToken cancellationToken = default);

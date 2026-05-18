@@ -95,6 +95,19 @@ public sealed class QuoteRequestDto : BaseEntityDto
     public long? UserId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string CurrencyCode { get; set; } = "TRY";
+    public string? OfferType { get; set; }
+    public DateTime? OfferDate { get; set; }
+    public string? OfferNo { get; set; }
+    public string? RevisionNo { get; set; }
+    public long? RevisionId { get; set; }
+    public DateTime? ValidUntil { get; set; }
+    public DateTime? DeliveryDate { get; set; }
+    public string? DeliveryMethod { get; set; }
+    public long? PaymentTypeId { get; set; }
+    public string? ErpProjectCode { get; set; }
+    public decimal? GeneralDiscountRate { get; set; }
+    public decimal? GeneralDiscountAmount { get; set; }
+    public decimal Total { get; set; }
     public decimal EstimatedTotal { get; set; }
     public string? CustomerNote { get; set; }
     public string? SalesNote { get; set; }
@@ -114,6 +127,24 @@ public sealed class QuoteRequestLineDto : BaseEntityDto
     public decimal Quantity { get; set; }
     public decimal? TargetUnitPrice { get; set; }
     public decimal? ApprovedUnitPrice { get; set; }
+    public decimal DiscountRate1 { get; set; }
+    public decimal DiscountAmount1 { get; set; }
+    public decimal DiscountRate2 { get; set; }
+    public decimal DiscountAmount2 { get; set; }
+    public decimal DiscountRate3 { get; set; }
+    public decimal DiscountAmount3 { get; set; }
+    public decimal VatRate { get; set; }
+    public decimal VatAmount { get; set; }
+    public decimal LineTotal { get; set; }
+    public decimal LineGrandTotal { get; set; }
+    public string? Description { get; set; }
+    public string? Description1 { get; set; }
+    public string? Description2 { get; set; }
+    public string? Description3 { get; set; }
+    public long? PricingRuleHeaderId { get; set; }
+    public string? RelatedProductKey { get; set; }
+    public bool IsMainRelatedProduct { get; set; }
+    public string? ErpProjectCode { get; set; }
 }
 
 public sealed class CreateQuoteRequestDto
@@ -121,6 +152,18 @@ public sealed class CreateQuoteRequestDto
     public long CustomerId { get; set; }
     public long? UserId { get; set; }
     [StringLength(3)] public string CurrencyCode { get; set; } = "TRY";
+    [StringLength(40)] public string? OfferType { get; set; }
+    public DateTime? OfferDate { get; set; }
+    [StringLength(60)] public string? OfferNo { get; set; }
+    [StringLength(30)] public string? RevisionNo { get; set; }
+    public long? RevisionId { get; set; }
+    public DateTime? ValidUntil { get; set; }
+    public DateTime? DeliveryDate { get; set; }
+    [StringLength(120)] public string? DeliveryMethod { get; set; }
+    public long? PaymentTypeId { get; set; }
+    [StringLength(50)] public string? ErpProjectCode { get; set; }
+    public decimal? GeneralDiscountRate { get; set; }
+    public decimal? GeneralDiscountAmount { get; set; }
     [StringLength(1000)] public string? CustomerNote { get; set; }
     public List<CreateQuoteRequestLineDto> Lines { get; set; } = new();
 }
@@ -134,6 +177,21 @@ public sealed class CreateQuoteRequestLineDto
     [StringLength(250)] public string? RequestedName { get; set; }
     public decimal Quantity { get; set; }
     public decimal? TargetUnitPrice { get; set; }
+    public decimal DiscountRate1 { get; set; }
+    public decimal DiscountAmount1 { get; set; }
+    public decimal DiscountRate2 { get; set; }
+    public decimal DiscountAmount2 { get; set; }
+    public decimal DiscountRate3 { get; set; }
+    public decimal DiscountAmount3 { get; set; }
+    public decimal VatRate { get; set; }
+    [StringLength(1000)] public string? Description { get; set; }
+    [StringLength(500)] public string? Description1 { get; set; }
+    [StringLength(500)] public string? Description2 { get; set; }
+    [StringLength(500)] public string? Description3 { get; set; }
+    public long? PricingRuleHeaderId { get; set; }
+    [StringLength(120)] public string? RelatedProductKey { get; set; }
+    public bool IsMainRelatedProduct { get; set; }
+    [StringLength(50)] public string? ErpProjectCode { get; set; }
 }
 
 public sealed class UpdateQuoteStatusDto

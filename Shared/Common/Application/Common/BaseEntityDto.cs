@@ -1,8 +1,5 @@
 namespace Wms.Application.Common;
 
-/// <summary>
-/// `_old/reference/verii_wms_api.Application/DTOs/Base/BaseEntityDto.cs` taban DTO davranışını taşır.
-/// </summary>
 public class BaseEntityDto
 {
     public long Id { get; set; }
