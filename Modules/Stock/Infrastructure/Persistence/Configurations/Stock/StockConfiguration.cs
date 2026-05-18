@@ -27,6 +27,11 @@ public sealed class StockConfiguration : BaseEntityConfiguration<StockEntity>
         builder.Property(x => x.Kod4Adi).HasMaxLength(250);
         builder.Property(x => x.Kod5).HasMaxLength(50);
         builder.Property(x => x.Kod5Adi).HasMaxLength(250);
+        builder.Property(x => x.SalesPrice1).HasPrecision(18, 4);
+        builder.Property(x => x.SalesPrice2).HasPrecision(18, 4);
+        builder.Property(x => x.SalesPrice3).HasPrecision(18, 4);
+        builder.Property(x => x.SalesPrice4).HasPrecision(18, 4);
+        builder.Property(x => x.VatRate).HasPrecision(18, 4);
 
         builder.HasIndex(x => x.ErpStockCode)
             .HasDatabaseName("IX_Stock_ErpStockCode")

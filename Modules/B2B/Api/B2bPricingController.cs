@@ -27,6 +27,13 @@ public sealed class B2bPricingController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
+    [HttpGet("price-lists/{id:long}")]
+    public async Task<ActionResult<ApiResponse<CustomerPriceListDto>>> GetPriceList(long id, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.GetPriceListAsync(id, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
     [HttpPost("price-lists")]
     public async Task<ActionResult<ApiResponse<CustomerPriceListDto>>> CreatePriceList([FromBody] CreateCustomerPriceListDto dto, CancellationToken cancellationToken = default)
     {

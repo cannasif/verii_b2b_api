@@ -24,6 +24,8 @@ public sealed class B2bOrderLineConfiguration : BaseEntityConfiguration<B2bOrder
         builder.Property(x => x.VatAmount).HasPrecision(18, 4);
         builder.Property(x => x.LineTotal).HasPrecision(18, 4);
         builder.Property(x => x.LineGrandTotal).HasPrecision(18, 4);
+        builder.Property(x => x.PriceSource).HasMaxLength(80);
+        builder.Property(x => x.ExchangeRate).HasPrecision(18, 8).HasDefaultValue(1m);
         builder.Property(x => x.Description).HasMaxLength(1000);
         builder.Property(x => x.Description1).HasMaxLength(500);
         builder.Property(x => x.Description2).HasMaxLength(500);

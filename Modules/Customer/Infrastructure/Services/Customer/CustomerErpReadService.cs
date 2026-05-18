@@ -33,7 +33,10 @@ public sealed class CustomerErpReadService : ICustomerErpReadService
                     SubeKodu = GetNullableValue<short>(reader, "SUBE_KODU"),
                     IsletmeKodu = GetNullableValue<short>(reader, "ISLETME_KODU"),
                     CariKod = GetNullableString(reader, "CARI_KOD") ?? string.Empty,
-                    CariIsim = GetNullableString(reader, "CARI_ISIM")
+                    CariIsim = GetNullableString(reader, "CARI_ISIM"),
+                    GroupCode = GetNullableString(reader, "GRUP_KODU"),
+                    CreditLimit = GetNullableValue<decimal>(reader, "RISK_SINIRI"),
+                    PriceListNumber = GetNullableValue<short>(reader, "LISTE_FIATI")
                 },
             cancellationToken);
     }

@@ -308,7 +308,14 @@ public sealed class B2bCommerceService : IB2bCommerceService
                 WarehouseCode = warehouseCode,
                 Quantity = dto.Quantity,
                 UnitPrice = resolved.Data.UnitPrice ?? dto.UnitPrice ?? 0,
-                CurrencyCode = resolved.Data.CurrencyCode
+                CurrencyCode = resolved.Data.CurrencyCode,
+                PriceSource = resolved.Data.PriceSource,
+                PriceListId = resolved.Data.PriceListId,
+                DiscountRate = resolved.Data.DiscountRate,
+                VatRate = resolved.Data.VatRate,
+                VatAmount = resolved.Data.VatAmount,
+                ExchangeRate = resolved.Data.ExchangeRate,
+                PriceResolvedAt = resolved.Data.PriceResolvedAt
             };
             await _cartLines.AddAsync(line, cancellationToken);
             var reserveResult = await ReserveInventoryAsync(line, dto.Quantity, dto.AllowBackorder, cancellationToken);
@@ -432,6 +439,13 @@ public sealed class B2bCommerceService : IB2bCommerceService
             line.UnitPrice = resolved.Data!.UnitPrice!.Value;
             line.CurrencyCode = resolved.Data.CurrencyCode;
             line.WarehouseCode = resolved.Data.PreferredWarehouseCode ?? line.WarehouseCode;
+            line.PriceSource = resolved.Data.PriceSource;
+            line.PriceListId = resolved.Data.PriceListId;
+            line.DiscountRate = resolved.Data.DiscountRate;
+            line.VatRate = resolved.Data.VatRate;
+            line.VatAmount = resolved.Data.VatAmount;
+            line.ExchangeRate = resolved.Data.ExchangeRate;
+            line.PriceResolvedAt = resolved.Data.PriceResolvedAt;
             line.SetUpdatedInfo();
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
@@ -486,6 +500,16 @@ public sealed class B2bCommerceService : IB2bCommerceService
             "Orders retrieved successfully");
     }
 
+    public async Task<ApiResponse<OrderDto>> GetOrderAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var entity = await _orders.Query()
+            .Include(x => x.Lines.Where(l => !l.IsDeleted))
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        return entity == null
+            ? ApiResponse<OrderDto>.ErrorResult("Order not found", statusCode: 404)
+            : ApiResponse<OrderDto>.SuccessResult(MapOrder(entity), "Order retrieved successfully");
+    }
+
     public async Task<ApiResponse<OrderDto>> CreateOrderFromCartAsync(CreateOrderFromCartDto dto, CancellationToken cancellationToken = default)
     {
         await _unitOfWork.BeginTransactionAsync(cancellationToken);
@@ -516,6 +540,13 @@ public sealed class B2bCommerceService : IB2bCommerceService
 
                 line.UnitPrice = resolved.Data!.UnitPrice!.Value;
                 line.CurrencyCode = resolved.Data.CurrencyCode;
+                line.PriceSource = resolved.Data.PriceSource;
+                line.PriceListId = resolved.Data.PriceListId;
+                line.DiscountRate = resolved.Data.DiscountRate;
+                line.VatRate = resolved.Data.VatRate;
+                line.VatAmount = resolved.Data.VatAmount;
+                line.ExchangeRate = resolved.Data.ExchangeRate;
+                line.PriceResolvedAt = resolved.Data.PriceResolvedAt;
                 line.SetUpdatedInfo();
             }
 
@@ -570,9 +601,15 @@ public sealed class B2bCommerceService : IB2bCommerceService
                     WarehouseCode = line.WarehouseCode,
                     Quantity = line.Quantity,
                     UnitPrice = line.UnitPrice,
+                    VatRate = line.VatRate,
+                    VatAmount = line.VatAmount,
                     ErpProjectCode = Trim(dto.ErpProjectCode),
                     LineTotal = line.Quantity * line.UnitPrice,
-                    LineGrandTotal = line.Quantity * line.UnitPrice
+                    LineGrandTotal = line.Quantity * line.UnitPrice + line.VatAmount,
+                    PriceSource = line.PriceSource,
+                    PriceListId = line.PriceListId,
+                    ExchangeRate = line.ExchangeRate,
+                    PriceResolvedAt = line.PriceResolvedAt
                 }, cancellationToken);
             }
 
@@ -903,7 +940,14 @@ public sealed class B2bCommerceService : IB2bCommerceService
         WarehouseCode = entity.WarehouseCode,
         Quantity = entity.Quantity,
         UnitPrice = entity.UnitPrice,
-        CurrencyCode = entity.CurrencyCode
+        CurrencyCode = entity.CurrencyCode,
+        PriceSource = entity.PriceSource,
+        PriceListId = entity.PriceListId,
+        DiscountRate = entity.DiscountRate,
+        VatRate = entity.VatRate,
+        VatAmount = entity.VatAmount,
+        ExchangeRate = entity.ExchangeRate,
+        PriceResolvedAt = entity.PriceResolvedAt
     };
 
     private static OrderDto MapOrder(B2bOrder entity) => new()
@@ -964,6 +1008,10 @@ public sealed class B2bCommerceService : IB2bCommerceService
         VatAmount = entity.VatAmount,
         LineTotal = entity.LineTotal,
         LineGrandTotal = entity.LineGrandTotal,
+        PriceSource = entity.PriceSource,
+        PriceListId = entity.PriceListId,
+        ExchangeRate = entity.ExchangeRate,
+        PriceResolvedAt = entity.PriceResolvedAt,
         Description = entity.Description,
         Description1 = entity.Description1,
         Description2 = entity.Description2,

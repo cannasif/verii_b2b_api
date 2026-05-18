@@ -34,6 +34,7 @@ public sealed class StockSyncJob : IStockSyncJob
                 {
                     ErpStockCode = x.StokKodu.Trim(),
                     StockName = string.IsNullOrWhiteSpace(x.StokAdi) ? x.StokKodu.Trim() : x.StokAdi.Trim(),
+                    Unit = x.Unit?.Trim(),
                     UreticiKodu = x.UreticiKodu?.Trim(),
                     GrupKodu = x.GrupKodu?.Trim(),
                     Kod1 = x.Kod1?.Trim(),
@@ -41,6 +42,11 @@ public sealed class StockSyncJob : IStockSyncJob
                     Kod3 = x.Kod3?.Trim(),
                     Kod4 = x.Kod4?.Trim(),
                     Kod5 = x.Kod5?.Trim(),
+                    SalesPrice1 = x.SalesPrice1,
+                    SalesPrice2 = x.SalesPrice2,
+                    SalesPrice3 = x.SalesPrice3,
+                    SalesPrice4 = x.SalesPrice4,
+                    VatRate = x.VatRate,
                     BranchCode = x.SubeKodu?.ToString() ?? "0"
                 })
                 .ToList();

@@ -13,6 +13,7 @@ public sealed class CustomerDto : BaseEntityDto
     public string? SalesRepCode { get; set; }
     public string? GroupCode { get; set; }
     public decimal? CreditLimit { get; set; }
+    public short? PriceListNumber { get; set; }
     public short? BusinessUnitCode { get; set; }
     public string? Email { get; set; }
     public string? Website { get; set; }
@@ -39,6 +40,7 @@ public sealed class CreateCustomerDto
     [StringLength(50)] public string? SalesRepCode { get; set; }
     [StringLength(50)] public string? GroupCode { get; set; }
     public decimal? CreditLimit { get; set; }
+    public short? PriceListNumber { get; set; }
     public string BranchCode { get; set; } = "0";
     public short? BusinessUnitCode { get; set; }
     [StringLength(100)] public string? Email { get; set; }
@@ -63,6 +65,7 @@ public sealed class UpdateCustomerDto
     [StringLength(50)] public string? SalesRepCode { get; set; }
     [StringLength(50)] public string? GroupCode { get; set; }
     public decimal? CreditLimit { get; set; }
+    public short? PriceListNumber { get; set; }
     public string? BranchCode { get; set; }
     public short? BusinessUnitCode { get; set; }
     [StringLength(100)] public string? Email { get; set; }
@@ -89,6 +92,7 @@ public sealed class SyncCustomerDto
     [StringLength(50)] public string? SalesRepCode { get; set; }
     [StringLength(50)] public string? GroupCode { get; set; }
     public decimal? CreditLimit { get; set; }
+    public short? PriceListNumber { get; set; }
     public string BranchCode { get; set; } = "0";
     public short? BusinessUnitCode { get; set; }
     [StringLength(100)] public string? Email { get; set; }

@@ -27,6 +27,13 @@ public sealed class B2bQuoteController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
+    [HttpGet("{id:long}")]
+    public async Task<ActionResult<ApiResponse<QuoteRequestDto>>> GetById(long id, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.GetQuoteAsync(id, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
     [HttpPost]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<QuoteRequestDto>>> Create([FromBody] CreateQuoteRequestDto dto, CancellationToken cancellationToken = default)

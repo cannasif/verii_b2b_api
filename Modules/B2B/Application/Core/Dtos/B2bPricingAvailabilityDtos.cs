@@ -31,9 +31,13 @@ public sealed class B2bPriceAvailabilityDto
     public decimal? UnitPrice { get; set; }
     public decimal? DiscountRate { get; set; }
     public decimal? LineTotal { get; set; }
+    public decimal VatRate { get; set; }
+    public decimal VatAmount { get; set; }
+    public decimal ExchangeRate { get; set; } = 1;
     public long? PriceListId { get; set; }
     public string? PriceListCode { get; set; }
     public string? PriceSource { get; set; }
+    public DateTime? PriceResolvedAt { get; set; }
     public bool IsAvailable { get; set; }
     public decimal AvailableToSell { get; set; }
     public decimal ReservedQuantity { get; set; }

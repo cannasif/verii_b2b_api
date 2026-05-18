@@ -59,6 +59,16 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
         return ApiResponse<PagedResponse<CustomerPriceListDto>>.SuccessResult(page, "Price lists retrieved successfully");
     }
 
+    public async Task<ApiResponse<CustomerPriceListDto>> GetPriceListAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var entity = await _priceLists.Query()
+            .Include(x => x.Items.Where(i => !i.IsDeleted))
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        return entity == null
+            ? ApiResponse<CustomerPriceListDto>.ErrorResult("Price list not found", statusCode: 404)
+            : ApiResponse<CustomerPriceListDto>.SuccessResult(MapPriceList(entity), "Price list retrieved successfully");
+    }
+
     public async Task<ApiResponse<CustomerPriceListDto>> CreatePriceListAsync(CreateCustomerPriceListDto dto, CancellationToken cancellationToken = default)
     {
         var code = Normalize(dto.Code);
@@ -179,6 +189,16 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
         return ApiResponse<PagedResponse<QuoteRequestDto>>.SuccessResult(page, "Quote requests retrieved successfully");
     }
 
+    public async Task<ApiResponse<QuoteRequestDto>> GetQuoteAsync(long id, CancellationToken cancellationToken = default)
+    {
+        var entity = await _quotes.Query()
+            .Include(x => x.Lines.Where(l => !l.IsDeleted))
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        return entity == null
+            ? ApiResponse<QuoteRequestDto>.ErrorResult("Quote not found", statusCode: 404)
+            : ApiResponse<QuoteRequestDto>.SuccessResult(MapQuote(entity), "Quote retrieved successfully");
+    }
+
     public async Task<ApiResponse<QuoteRequestDto>> CreateQuoteAsync(CreateQuoteRequestDto dto, CancellationToken cancellationToken = default)
     {
         if (dto.Lines.Count == 0)
@@ -186,7 +206,13 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
             return ApiResponse<QuoteRequestDto>.ErrorResult("Quote must include at least one line", statusCode: 400);
         }
 
-        var calculatedLines = dto.Lines.Select(CalculateQuoteLine).ToList();
+        var normalizedLines = new List<CreateQuoteRequestLineDto>();
+        foreach (var inputLine in dto.Lines)
+        {
+            normalizedLines.Add(await ResolveQuoteLinePriceAsync(dto, inputLine, cancellationToken));
+        }
+
+        var calculatedLines = normalizedLines.Select(CalculateQuoteLine).ToList();
         var total = calculatedLines.Sum(x => x.lineTotal);
         var grandTotal = calculatedLines.Sum(x => x.lineGrandTotal);
         if (dto.GeneralDiscountRate is > 0)
@@ -250,6 +276,10 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
                 VatAmount = calculatedLine.vatAmount,
                 LineTotal = calculatedLine.lineTotal,
                 LineGrandTotal = calculatedLine.lineGrandTotal,
+                PriceSource = line.PriceSource,
+                PriceListId = line.PriceListId,
+                ExchangeRate = line.ExchangeRate,
+                PriceResolvedAt = line.PriceResolvedAt,
                 Description = Trim(line.Description),
                 Description1 = Trim(line.Description1),
                 Description2 = Trim(line.Description2),
@@ -272,6 +302,43 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         var saved = await _quotes.Query().Include(x => x.Lines.Where(l => !l.IsDeleted)).FirstAsync(x => x.Id == quote.Id, cancellationToken);
         return ApiResponse<QuoteRequestDto>.SuccessResult(MapQuote(saved), "Quote request created successfully");
+    }
+
+    private async Task<CreateQuoteRequestLineDto> ResolveQuoteLinePriceAsync(CreateQuoteRequestDto quote, CreateQuoteRequestLineDto line, CancellationToken cancellationToken)
+    {
+        if (line.Quantity <= 0 || (!line.CatalogProductId.HasValue && !line.CatalogVariantId.HasValue && !line.ErpStockId.HasValue && string.IsNullOrWhiteSpace(line.RequestedSku)))
+        {
+            return line;
+        }
+
+        var resolved = await _pricingAvailabilityResolver.ResolveAsync(new ResolveB2bPriceAvailabilityDto
+        {
+            CustomerId = quote.CustomerId,
+            CustomerSku = line.RequestedSku,
+            CatalogProductId = line.CatalogProductId,
+            CatalogVariantId = line.CatalogVariantId,
+            ErpStockId = line.ErpStockId,
+            Quantity = line.Quantity,
+            CurrencyCode = quote.CurrencyCode
+        }, cancellationToken);
+
+        if (!resolved.Success || resolved.Data is not { IsPriceResolved: true } data)
+        {
+            return line;
+        }
+
+        line.TargetUnitPrice ??= data.UnitPrice;
+        line.VatRate = line.VatRate > 0 ? line.VatRate : data.VatRate;
+        line.PriceSource = data.PriceSource;
+        line.PriceListId = data.PriceListId;
+        line.ExchangeRate = data.ExchangeRate;
+        line.PriceResolvedAt = data.PriceResolvedAt;
+        line.CatalogProductId ??= data.CatalogProductId;
+        line.CatalogVariantId ??= data.CatalogVariantId;
+        line.ErpStockId ??= data.ErpStockId;
+        line.RequestedSku = string.IsNullOrWhiteSpace(line.RequestedSku) ? data.ResolvedSku : line.RequestedSku;
+        line.RequestedName = string.IsNullOrWhiteSpace(line.RequestedName) ? data.ResolvedName : line.RequestedName;
+        return line;
     }
 
     public async Task<ApiResponse<QuoteRequestDto>> UpdateQuoteStatusAsync(long id, UpdateQuoteStatusDto dto, CancellationToken cancellationToken = default)
@@ -371,6 +438,13 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
                     Quantity = quoteLine.Quantity,
                     UnitPrice = unitPrice.Value,
                     CurrencyCode = quote.CurrencyCode,
+                    PriceSource = quoteLine.PriceSource ?? resolved.Data.PriceSource,
+                    PriceListId = quoteLine.PriceListId ?? resolved.Data.PriceListId,
+                    DiscountRate = resolved.Data.DiscountRate,
+                    VatRate = quoteLine.VatRate > 0 ? quoteLine.VatRate : resolved.Data.VatRate,
+                    VatAmount = quoteLine.VatAmount > 0 ? quoteLine.VatAmount : resolved.Data.VatAmount,
+                    ExchangeRate = quoteLine.ExchangeRate > 0 ? quoteLine.ExchangeRate : resolved.Data.ExchangeRate,
+                    PriceResolvedAt = quoteLine.PriceResolvedAt ?? resolved.Data.PriceResolvedAt,
                     CreatedDate = DateTimeProvider.Now
                 };
                 await _cartLines.AddAsync(cartLine, cancellationToken);
@@ -510,7 +584,14 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
         WarehouseCode = entity.WarehouseCode,
         Quantity = entity.Quantity,
         UnitPrice = entity.UnitPrice,
-        CurrencyCode = entity.CurrencyCode
+        CurrencyCode = entity.CurrencyCode,
+        PriceSource = entity.PriceSource,
+        PriceListId = entity.PriceListId,
+        DiscountRate = entity.DiscountRate,
+        VatRate = entity.VatRate,
+        VatAmount = entity.VatAmount,
+        ExchangeRate = entity.ExchangeRate,
+        PriceResolvedAt = entity.PriceResolvedAt
     };
 
     private static CustomerPriceListDto MapPriceList(CustomerPriceList entity) => new()
@@ -625,6 +706,10 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
         VatAmount = entity.VatAmount,
         LineTotal = entity.LineTotal,
         LineGrandTotal = entity.LineGrandTotal,
+        PriceSource = entity.PriceSource,
+        PriceListId = entity.PriceListId,
+        ExchangeRate = entity.ExchangeRate,
+        PriceResolvedAt = entity.PriceResolvedAt,
         Description = entity.Description,
         Description1 = entity.Description1,
         Description2 = entity.Description2,

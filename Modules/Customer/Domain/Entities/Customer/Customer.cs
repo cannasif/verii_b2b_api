@@ -12,6 +12,7 @@ public sealed class Customer : BaseEntity
     public string? SalesRepCode { get; set; }
     public string? GroupCode { get; set; }
     public decimal? CreditLimit { get; set; }
+    public short? PriceListNumber { get; set; }
     public short? BusinessUnitCode { get; set; }
     public string? Email { get; set; }
     public string? Website { get; set; }

@@ -3,6 +3,9 @@ using Wms.Application.B2B.Dtos;
 using Wms.Application.Common;
 using Wms.Domain.Common;
 using Wms.Domain.Entities.B2B;
+using Wms.Modules.NetsisIntegrations.Application.Services;
+using CustomerEntity = Wms.Domain.Entities.Customer.Customer;
+using StockEntity = Wms.Domain.Entities.Stock.Stock;
 
 namespace Wms.Application.B2B.Services;
 
@@ -15,6 +18,9 @@ public sealed class B2bPricingAvailabilityResolver : IB2bPricingAvailabilityReso
     private readonly IRepository<CustomerPriceList> _priceLists;
     private readonly IRepository<CustomerPriceListItem> _priceListItems;
     private readonly IRepository<InventorySnapshot> _inventory;
+    private readonly IRepository<StockEntity> _stocks;
+    private readonly IRepository<CustomerEntity> _customers;
+    private readonly INetsisReadService _netsisReadService;
 
     public B2bPricingAvailabilityResolver(
         IRepository<B2bCompany> companies,
@@ -23,7 +29,10 @@ public sealed class B2bPricingAvailabilityResolver : IB2bPricingAvailabilityReso
         IRepository<CustomerProductAlias> aliases,
         IRepository<CustomerPriceList> priceLists,
         IRepository<CustomerPriceListItem> priceListItems,
-        IRepository<InventorySnapshot> inventory)
+        IRepository<InventorySnapshot> inventory,
+        IRepository<StockEntity> stocks,
+        IRepository<CustomerEntity> customers,
+        INetsisReadService netsisReadService)
     {
         _companies = companies;
         _catalogProducts = catalogProducts;
@@ -32,6 +41,9 @@ public sealed class B2bPricingAvailabilityResolver : IB2bPricingAvailabilityReso
         _priceLists = priceLists;
         _priceListItems = priceListItems;
         _inventory = inventory;
+        _stocks = stocks;
+        _customers = customers;
+        _netsisReadService = netsisReadService;
     }
 
     public async Task<ApiResponse<B2bPriceAvailabilityDto>> ResolveAsync(ResolveB2bPriceAvailabilityDto dto, CancellationToken cancellationToken = default)
@@ -200,12 +212,68 @@ public sealed class B2bPricingAvailabilityResolver : IB2bPricingAvailabilityReso
             (scope.ErpStockId.HasValue && x.ErpStockId == scope.ErpStockId.Value));
 
         var candidates = await query.ToListAsync(cancellationToken);
-        return candidates
+        var manualPrice = candidates
             .Select(x => new ResolvedPrice(x, CalculatePriceSpecificity(x, customerId, customerGroupCode, scope)))
             .OrderByDescending(x => x.Specificity)
-            .ThenByDescending(x => x.Item.MinQuantity ?? 0)
+            .ThenByDescending(x => x.MinQuantity ?? 0)
             .ThenBy(x => x.EffectiveUnitPrice)
             .FirstOrDefault();
+
+        if (manualPrice != null)
+        {
+            return manualPrice;
+        }
+
+        return await ResolveErpPriceAsync(customerId, scope, quantity, currencyCode, requestedDate, cancellationToken);
+    }
+
+    private async Task<ResolvedPrice?> ResolveErpPriceAsync(
+        long customerId,
+        ResolvedProductScope scope,
+        decimal quantity,
+        string currencyCode,
+        DateTime requestedDate,
+        CancellationToken cancellationToken)
+    {
+        if (!scope.ErpStockId.HasValue)
+        {
+            return null;
+        }
+
+        var stock = await _stocks.Query()
+            .Where(x => !x.IsDeleted && x.Id == scope.ErpStockId.Value)
+            .FirstOrDefaultAsync(cancellationToken);
+        if (stock == null)
+        {
+            return null;
+        }
+
+        var customer = await _customers.Query()
+            .Where(x => !x.IsDeleted && x.Id == customerId)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        var priceListNumber = NormalizePriceListNumber(customer?.PriceListNumber);
+        var basePrice = ResolveStockPrice(stock, priceListNumber);
+        if (!basePrice.HasValue || basePrice.Value <= 0)
+        {
+            return null;
+        }
+
+        var exchangeRate = await ResolveExchangeRateAsync(currencyCode, requestedDate, cancellationToken);
+        if (exchangeRate <= 0)
+        {
+            return null;
+        }
+
+        var unitPrice = NormalizeCurrency(currencyCode) is "TRY" or "TL"
+            ? basePrice.Value
+            : Math.Round(basePrice.Value / exchangeRate, 4);
+
+        return new ResolvedPrice(
+            unitPrice,
+            "ErpPriceList" + priceListNumber,
+            vatRate: stock.VatRate ?? 0,
+            exchangeRate: exchangeRate);
     }
 
     private async Task<List<B2bWarehouseAvailabilityDto>> ResolveAvailabilityAsync(ResolvedProductScope scope, int? warehouseCode, CancellationToken cancellationToken)
@@ -252,11 +320,15 @@ public sealed class B2bPricingAvailabilityResolver : IB2bPricingAvailabilityReso
 
         response.IsPriceResolved = true;
         response.UnitPrice = price.EffectiveUnitPrice;
-        response.DiscountRate = price.Item.DiscountRate;
+        response.DiscountRate = price.DiscountRate;
         response.LineTotal = price.EffectiveUnitPrice * response.RequestedQuantity;
-        response.PriceListId = price.Item.PriceListId;
-        response.PriceListCode = price.Item.PriceList?.Code;
+        response.VatRate = price.VatRate;
+        response.VatAmount = Math.Round((response.LineTotal ?? 0) * price.VatRate / 100m, 4);
+        response.ExchangeRate = price.ExchangeRate;
+        response.PriceListId = price.PriceListId;
+        response.PriceListCode = price.PriceListCode;
         response.PriceSource = price.Source;
+        response.PriceResolvedAt = DateTimeProvider.Now;
     }
 
     private static void ApplyAvailability(B2bPriceAvailabilityDto response, List<B2bWarehouseAvailabilityDto> warehouses, decimal quantity)
@@ -285,6 +357,35 @@ public sealed class B2bPricingAvailabilityResolver : IB2bPricingAvailabilityReso
 
     private static string Normalize(string value) => value.Trim().ToUpperInvariant();
     private static string NormalizeCurrency(string? value) => string.IsNullOrWhiteSpace(value) ? "TRY" : value.Trim().ToUpperInvariant();
+    private static short NormalizePriceListNumber(short? value) => value is >= 1 and <= 4 ? value.Value : (short)1;
+
+    private static decimal? ResolveStockPrice(StockEntity stock, short priceListNumber)
+    {
+        return priceListNumber switch
+        {
+            2 => stock.SalesPrice2,
+            3 => stock.SalesPrice3,
+            4 => stock.SalesPrice4,
+            _ => stock.SalesPrice1
+        };
+    }
+
+    private async Task<decimal> ResolveExchangeRateAsync(string currencyCode, DateTime requestedDate, CancellationToken cancellationToken)
+    {
+        var normalized = NormalizeCurrency(currencyCode);
+        if (normalized is "TRY" or "TL")
+        {
+            return 1m;
+        }
+
+        var response = await _netsisReadService.GetExchangeRatesAsync(requestedDate.Date, pricingType: 2, cancellationToken);
+        var rate = response.Data?
+            .FirstOrDefault(x =>
+                string.Equals(x.DovizIsmi, normalized, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(x.DovizTipi.ToString(), normalized, StringComparison.OrdinalIgnoreCase))
+            ?.KurDegeri;
+        return rate is > 0 ? Convert.ToDecimal(rate.Value) : 0m;
+    }
 
     private sealed class ResolvedProductScope
     {
@@ -300,17 +401,33 @@ public sealed class B2bPricingAvailabilityResolver : IB2bPricingAvailabilityReso
     {
         public ResolvedPrice(CustomerPriceListItem item, int specificity)
         {
-            Item = item;
             Specificity = specificity;
             EffectiveUnitPrice = item.DiscountRate.HasValue
                 ? item.UnitPrice * (1 - item.DiscountRate.Value / 100)
                 : item.UnitPrice;
-            Source = item.CatalogVariantId.HasValue ? "Variant" : item.CatalogProductId.HasValue ? "CatalogProduct" : "ErpStock";
+            Source = item.CatalogVariantId.HasValue ? "ManualVariantPrice" : item.CatalogProductId.HasValue ? "ManualCatalogPrice" : "ManualErpStockPrice";
+            DiscountRate = item.DiscountRate;
+            PriceListId = item.PriceListId;
+            PriceListCode = item.PriceList?.Code;
+            MinQuantity = item.MinQuantity;
         }
 
-        public CustomerPriceListItem Item { get; }
+        public ResolvedPrice(decimal effectiveUnitPrice, string source, decimal vatRate, decimal exchangeRate)
+        {
+            EffectiveUnitPrice = effectiveUnitPrice;
+            Source = source;
+            VatRate = vatRate;
+            ExchangeRate = exchangeRate;
+        }
+
         public int Specificity { get; }
         public decimal EffectiveUnitPrice { get; }
         public string Source { get; }
+        public decimal? DiscountRate { get; }
+        public long? PriceListId { get; }
+        public string? PriceListCode { get; }
+        public decimal? MinQuantity { get; }
+        public decimal VatRate { get; }
+        public decimal ExchangeRate { get; } = 1;
     }
 }

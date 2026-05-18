@@ -6,4 +6,7 @@ public sealed class FnCustomerRow
     public short? IsletmeKodu { get; set; }
     public string CariKod { get; set; } = string.Empty;
     public string? CariIsim { get; set; }
+    public string? GroupCode { get; set; }
+    public decimal? CreditLimit { get; set; }
+    public short? PriceListNumber { get; set; }
 }

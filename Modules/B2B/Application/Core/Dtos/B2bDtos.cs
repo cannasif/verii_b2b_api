@@ -118,6 +118,13 @@ public sealed class CartLineDto : BaseEntityDto
     public decimal Quantity { get; set; }
     public decimal UnitPrice { get; set; }
     public string CurrencyCode { get; set; } = "TRY";
+    public string? PriceSource { get; set; }
+    public long? PriceListId { get; set; }
+    public decimal? DiscountRate { get; set; }
+    public decimal VatRate { get; set; }
+    public decimal VatAmount { get; set; }
+    public decimal ExchangeRate { get; set; } = 1;
+    public DateTime? PriceResolvedAt { get; set; }
 }
 
 public sealed class AddCartLineDto
@@ -232,6 +239,10 @@ public sealed class OrderLineDto : BaseEntityDto
     public decimal VatAmount { get; set; }
     public decimal LineTotal { get; set; }
     public decimal LineGrandTotal { get; set; }
+    public string? PriceSource { get; set; }
+    public long? PriceListId { get; set; }
+    public decimal ExchangeRate { get; set; } = 1;
+    public DateTime? PriceResolvedAt { get; set; }
     public string? Description { get; set; }
     public string? Description1 { get; set; }
     public string? Description2 { get; set; }

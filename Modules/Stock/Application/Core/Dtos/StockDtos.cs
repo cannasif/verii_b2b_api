@@ -21,6 +21,11 @@ public sealed class StockDto : BaseEntityDto
     public string? Kod4Adi { get; set; }
     public string? Kod5 { get; set; }
     public string? Kod5Adi { get; set; }
+    public decimal? SalesPrice1 { get; set; }
+    public decimal? SalesPrice2 { get; set; }
+    public decimal? SalesPrice3 { get; set; }
+    public decimal? SalesPrice4 { get; set; }
+    public decimal? VatRate { get; set; }
     public DateTime? LastSyncDate { get; set; }
 }
 
@@ -44,6 +49,11 @@ public sealed class CreateStockDto
     [StringLength(250)] public string? Kod4Adi { get; set; }
     [StringLength(50)] public string? Kod5 { get; set; }
     [StringLength(250)] public string? Kod5Adi { get; set; }
+    public decimal? SalesPrice1 { get; set; }
+    public decimal? SalesPrice2 { get; set; }
+    public decimal? SalesPrice3 { get; set; }
+    public decimal? SalesPrice4 { get; set; }
+    public decimal? VatRate { get; set; }
     public string BranchCode { get; set; } = "0";
 }
 
@@ -65,6 +75,11 @@ public sealed class UpdateStockDto
     [StringLength(250)] public string? Kod4Adi { get; set; }
     [StringLength(50)] public string? Kod5 { get; set; }
     [StringLength(250)] public string? Kod5Adi { get; set; }
+    public decimal? SalesPrice1 { get; set; }
+    public decimal? SalesPrice2 { get; set; }
+    public decimal? SalesPrice3 { get; set; }
+    public decimal? SalesPrice4 { get; set; }
+    public decimal? VatRate { get; set; }
     public string? BranchCode { get; set; }
 }
 
@@ -88,6 +103,11 @@ public sealed class SyncStockDto
     [StringLength(250)] public string? Kod4Adi { get; set; }
     [StringLength(50)] public string? Kod5 { get; set; }
     [StringLength(250)] public string? Kod5Adi { get; set; }
+    public decimal? SalesPrice1 { get; set; }
+    public decimal? SalesPrice2 { get; set; }
+    public decimal? SalesPrice3 { get; set; }
+    public decimal? SalesPrice4 { get; set; }
+    public decimal? VatRate { get; set; }
     public string BranchCode { get; set; } = "0";
 }
 

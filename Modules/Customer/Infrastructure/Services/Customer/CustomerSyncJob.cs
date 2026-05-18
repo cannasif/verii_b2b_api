@@ -34,6 +34,9 @@ public sealed class CustomerSyncJob : ICustomerSyncJob
                 {
                     CustomerCode = x.CariKod.Trim(),
                     CustomerName = string.IsNullOrWhiteSpace(x.CariIsim) ? x.CariKod.Trim() : x.CariIsim.Trim(),
+                    GroupCode = x.GroupCode?.Trim(),
+                    CreditLimit = x.CreditLimit,
+                    PriceListNumber = x.PriceListNumber,
                     BranchCode = x.SubeKodu?.ToString() ?? "0",
                     BusinessUnitCode = x.IsletmeKodu
                 })

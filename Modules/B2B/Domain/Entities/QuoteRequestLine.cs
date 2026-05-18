@@ -23,6 +23,10 @@ public sealed class QuoteRequestLine : BaseEntity
     public decimal VatAmount { get; set; }
     public decimal LineTotal { get; set; }
     public decimal LineGrandTotal { get; set; }
+    public string? PriceSource { get; set; }
+    public long? PriceListId { get; set; }
+    public decimal ExchangeRate { get; set; } = 1;
+    public DateTime? PriceResolvedAt { get; set; }
     public string? Description { get; set; }
     public string? Description1 { get; set; }
     public string? Description2 { get; set; }

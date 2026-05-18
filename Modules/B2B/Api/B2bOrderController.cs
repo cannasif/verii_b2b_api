@@ -27,6 +27,13 @@ public sealed class B2bOrderController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
+    [HttpGet("{id:long}")]
+    public async Task<ActionResult<ApiResponse<OrderDto>>> GetById(long id, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.GetOrderAsync(id, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
     [HttpPost("from-cart")]
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<OrderDto>>> CreateFromCart([FromBody] CreateOrderFromCartDto dto, CancellationToken cancellationToken = default)

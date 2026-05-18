@@ -40,7 +40,13 @@ public sealed class StockErpReadService : IStockErpReadService
                     Kod2 = GetNullableString(reader, "KOD_2"),
                     Kod3 = GetNullableString(reader, "KOD_3"),
                     Kod4 = GetNullableString(reader, "KOD_4"),
-                    Kod5 = GetNullableString(reader, "KOD_5")
+                    Kod5 = GetNullableString(reader, "KOD_5"),
+                    Unit = GetNullableString(reader, "OLCU_BR1"),
+                    SalesPrice1 = GetNullableValue<decimal>(reader, "SATIS_FIAT1"),
+                    SalesPrice2 = GetNullableValue<decimal>(reader, "SATIS_FIAT2"),
+                    SalesPrice3 = GetNullableValue<decimal>(reader, "SATIS_FIAT3"),
+                    SalesPrice4 = GetNullableValue<decimal>(reader, "SATIS_FIAT4"),
+                    VatRate = GetNullableValue<decimal>(reader, "KDV_ORANI")
                 },
             cancellationToken);
     }

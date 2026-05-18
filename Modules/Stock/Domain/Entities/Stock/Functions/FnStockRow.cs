@@ -13,4 +13,10 @@ public sealed class FnStockRow
     public string? Kod3 { get; set; }
     public string? Kod4 { get; set; }
     public string? Kod5 { get; set; }
+    public string? Unit { get; set; }
+    public decimal? SalesPrice1 { get; set; }
+    public decimal? SalesPrice2 { get; set; }
+    public decimal? SalesPrice3 { get; set; }
+    public decimal? SalesPrice4 { get; set; }
+    public decimal? VatRate { get; set; }
 }

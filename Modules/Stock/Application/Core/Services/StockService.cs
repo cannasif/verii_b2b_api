@@ -216,6 +216,11 @@ public sealed class StockService : IStockService
         entity.Kod4Adi = item.Kod4Adi?.Trim();
         entity.Kod5 = item.Kod5?.Trim();
         entity.Kod5Adi = item.Kod5Adi?.Trim();
+        entity.SalesPrice1 = item.SalesPrice1;
+        entity.SalesPrice2 = item.SalesPrice2;
+        entity.SalesPrice3 = item.SalesPrice3;
+        entity.SalesPrice4 = item.SalesPrice4;
+        entity.VatRate = item.VatRate;
         entity.BranchCode = NormalizeBranchCode(item.BranchCode);
         entity.LastSyncDate = now;
     }
