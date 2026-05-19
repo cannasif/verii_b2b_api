@@ -304,12 +304,20 @@ public sealed class CustomerPortalSummaryDto
 public sealed class PaymentTransactionDto : BaseEntityDto
 {
     public long OrderId { get; set; }
+    public long? PaymentOrderId { get; set; }
+    public long? PaymentInstallmentId { get; set; }
     public string ProviderKey { get; set; } = string.Empty;
     public string? ExternalTransactionId { get; set; }
     public string Status { get; set; } = string.Empty;
     public decimal Amount { get; set; }
+    public decimal? ProviderPaymentAmount { get; set; }
+    public decimal? ProviderCollectedAmount { get; set; }
     public string CurrencyCode { get; set; } = "TRY";
     public string? PaymentMethod { get; set; }
+    public DateTime? DueDate { get; set; }
+    public short? PaymentTermDays { get; set; }
+    public int InstallmentCount { get; set; } = 1;
+    public string? InstallmentPlanJson { get; set; }
     public DateTime? RequestedDate { get; set; }
     public DateTime? CompletedDate { get; set; }
 }
@@ -317,11 +325,17 @@ public sealed class PaymentTransactionDto : BaseEntityDto
 public sealed class CreatePaymentTransactionDto
 {
     public long OrderId { get; set; }
+    public long? PaymentOrderId { get; set; }
+    public long? PaymentInstallmentId { get; set; }
     [Required, StringLength(80)] public string ProviderKey { get; set; } = string.Empty;
     [StringLength(160)] public string? ExternalTransactionId { get; set; }
     public decimal Amount { get; set; }
     [StringLength(3)] public string CurrencyCode { get; set; } = "TRY";
     [StringLength(80)] public string? PaymentMethod { get; set; }
+    public DateTime? DueDate { get; set; }
+    public short? PaymentTermDays { get; set; }
+    public int InstallmentCount { get; set; } = 1;
+    public string? InstallmentPlanJson { get; set; }
 }
 
 public sealed class UpdatePaymentStatusDto
@@ -353,4 +367,59 @@ public sealed class PaytrIframeTokenDto
     public decimal Amount { get; set; }
     public string CurrencyCode { get; set; } = "TRY";
     public bool TestMode { get; set; }
+}
+
+public sealed class PaymentOrderDto : BaseEntityDto
+{
+    public string PaymentOrderNumber { get; set; } = string.Empty;
+    public long OrderId { get; set; }
+    public long CustomerId { get; set; }
+    public long? BuyerId { get; set; }
+    public long? UserId { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public decimal RemainingAmount { get; set; }
+    public string CurrencyCode { get; set; } = "TRY";
+    public short? PaymentTermDays { get; set; }
+    public DateTime DueDate { get; set; }
+    public bool IsDueDateOverridden { get; set; }
+    public int InstallmentCount { get; set; }
+    public string? PaymentMethod { get; set; }
+    public string? ProviderKey { get; set; }
+    public string? Notes { get; set; }
+    public List<PaymentInstallmentDto> Installments { get; set; } = new();
+}
+
+public sealed class PaymentInstallmentDto : BaseEntityDto
+{
+    public long PaymentOrderId { get; set; }
+    public int InstallmentNumber { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public DateTime DueDate { get; set; }
+    public decimal Amount { get; set; }
+    public decimal PaidAmount { get; set; }
+    public DateTime? PaidDate { get; set; }
+    public string? Notes { get; set; }
+}
+
+public sealed class CreatePaymentOrderDto
+{
+    public long OrderId { get; set; }
+    public short? PaymentTermDays { get; set; }
+    public DateTime? DueDate { get; set; }
+    [Range(1, 36)] public int InstallmentCount { get; set; } = 1;
+    [StringLength(80)] public string? PaymentMethod { get; set; }
+    [StringLength(80)] public string? ProviderKey { get; set; }
+    [StringLength(1000)] public string? Notes { get; set; }
+}
+
+public sealed class UpdatePaymentOrderPlanDto
+{
+    public short? PaymentTermDays { get; set; }
+    public DateTime? DueDate { get; set; }
+    [Range(1, 36)] public int InstallmentCount { get; set; } = 1;
+    [StringLength(80)] public string? PaymentMethod { get; set; }
+    [StringLength(80)] public string? ProviderKey { get; set; }
+    [StringLength(1000)] public string? Notes { get; set; }
 }

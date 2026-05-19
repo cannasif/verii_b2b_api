@@ -16,10 +16,20 @@ public sealed class PaymentTransactionConfiguration : BaseEntityConfiguration<Pa
         builder.Property(x => x.CurrencyCode).HasMaxLength(3).IsRequired();
         builder.Property(x => x.PaymentMethod).HasMaxLength(80);
         builder.Property(x => x.CallbackPayloadJson).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.InstallmentPlanJson).HasColumnType("nvarchar(max)");
         builder.Property(x => x.Amount).HasPrecision(18, 4);
+        builder.Property(x => x.ProviderPaymentAmount).HasPrecision(18, 4);
+        builder.Property(x => x.ProviderCollectedAmount).HasPrecision(18, 4);
 
         builder.HasIndex(x => x.OrderId).HasDatabaseName("IX_B2B_Payment_OrderId");
+        builder.HasIndex(x => x.PaymentOrderId).HasDatabaseName("IX_B2B_Payment_PaymentOrderId");
+        builder.HasIndex(x => x.PaymentInstallmentId).HasDatabaseName("IX_B2B_Payment_InstallmentId");
         builder.HasIndex(x => new { x.ProviderKey, x.ExternalTransactionId }).HasDatabaseName("IX_B2B_Payment_ProviderExternalId");
         builder.HasIndex(x => x.Status).HasDatabaseName("IX_B2B_Payment_Status");
+
+        builder.HasOne(x => x.PaymentOrder)
+            .WithMany(x => x.Transactions)
+            .HasForeignKey(x => x.PaymentOrderId)
+            .OnDelete(DeleteBehavior.Restrict);
     }
 }

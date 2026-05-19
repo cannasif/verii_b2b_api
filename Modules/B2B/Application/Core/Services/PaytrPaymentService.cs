@@ -9,6 +9,7 @@ using Wms.Application.B2B.Dtos;
 using Wms.Application.Common;
 using Wms.Domain.Common;
 using Wms.Domain.Entities.B2B;
+using CustomerEntity = Wms.Domain.Entities.Customer.Customer;
 
 namespace Wms.Application.B2B.Services;
 
@@ -18,6 +19,8 @@ public sealed class PaytrPaymentService : IPaytrPaymentService
     private readonly HttpClient _httpClient;
     private readonly PaytrOptions _options;
     private readonly IRepository<B2bOrder> _orders;
+    private readonly IRepository<CustomerEntity> _customers;
+    private readonly IRepository<PaymentOrder> _paymentOrders;
     private readonly IRepository<PaymentTransaction> _payments;
     private readonly IUnitOfWork _unitOfWork;
 
@@ -25,12 +28,16 @@ public sealed class PaytrPaymentService : IPaytrPaymentService
         HttpClient httpClient,
         IOptions<PaytrOptions> options,
         IRepository<B2bOrder> orders,
+        IRepository<CustomerEntity> customers,
+        IRepository<PaymentOrder> paymentOrders,
         IRepository<PaymentTransaction> payments,
         IUnitOfWork unitOfWork)
     {
         _httpClient = httpClient;
         _options = options.Value;
         _orders = orders;
+        _customers = customers;
+        _paymentOrders = paymentOrders;
         _payments = payments;
         _unitOfWork = unitOfWork;
     }
@@ -60,6 +67,11 @@ public sealed class PaytrPaymentService : IPaytrPaymentService
         var currency = ToPaytrCurrency(order.CurrencyCode);
         var userIp = Trim(dto.UserIp) ?? requestIp;
         var userBasket = CreateBasket(order);
+        var paymentOrder = await GetOrCreatePaymentOrderAsync(order, "PAYTR", "PayTR iFrame", cancellationToken);
+        var firstOpenInstallment = paymentOrder.Installments
+            .Where(x => !x.IsDeleted && x.Status != B2bWorkflowStatuses.Completed)
+            .OrderBy(x => x.InstallmentNumber)
+            .FirstOrDefault();
         var okUrl = Trim(dto.OkUrl) ?? _options.OkUrl;
         var failUrl = Trim(dto.FailUrl) ?? _options.FailUrl;
         if (string.IsNullOrWhiteSpace(okUrl) || string.IsNullOrWhiteSpace(failUrl))
@@ -113,12 +125,19 @@ public sealed class PaytrPaymentService : IPaytrPaymentService
         var payment = new PaymentTransaction
         {
             OrderId = order.Id,
+            PaymentOrderId = paymentOrder.Id,
+            PaymentInstallmentId = firstOpenInstallment?.Id,
             ProviderKey = "PAYTR",
             ExternalTransactionId = merchantOid,
             Status = B2bWorkflowStatuses.Pending,
             Amount = order.GrandTotal,
+            ProviderPaymentAmount = order.GrandTotal,
             CurrencyCode = order.CurrencyCode,
             PaymentMethod = "PayTR iFrame",
+            DueDate = firstOpenInstallment?.DueDate ?? paymentOrder.DueDate,
+            PaymentTermDays = paymentOrder.PaymentTermDays,
+            InstallmentCount = paymentOrder.InstallmentCount,
+            InstallmentPlanJson = BuildInstallmentPlanJson(paymentOrder.Installments),
             RequestedDate = DateTimeProvider.Now
         };
         await _payments.AddAsync(payment, cancellationToken);
@@ -173,10 +192,15 @@ public sealed class PaytrPaymentService : IPaytrPaymentService
         }
 
         payment.CallbackPayloadJson = JsonSerializer.Serialize(form.ToDictionary(x => x.Key, x => x.Value.ToString()), JsonOptions);
+        payment.ProviderPaymentAmount = ParseMinorUnitToAmount(form["payment_amount"].ToString()) ?? payment.ProviderPaymentAmount;
+        payment.ProviderCollectedAmount = ParseMinorUnitToAmount(totalAmount) ?? payment.ProviderCollectedAmount;
+        payment.CurrencyCode = NormalizePaytrCurrency(form["currency"].ToString(), payment.CurrencyCode);
+        payment.PaymentMethod = string.IsNullOrWhiteSpace(form["payment_type"].ToString()) ? payment.PaymentMethod : form["payment_type"].ToString();
         if (string.Equals(status, "success", StringComparison.OrdinalIgnoreCase))
         {
             payment.Status = B2bWorkflowStatuses.Completed;
             payment.CompletedDate = DateTimeProvider.Now;
+            await ApplyPaymentOrderCompletionAsync(payment, cancellationToken);
             if (payment.Order is not null && string.Equals(payment.Order.Status, B2bWorkflowStatuses.WaitingPayment, StringComparison.OrdinalIgnoreCase))
             {
                 payment.Order.Status = B2bWorkflowStatuses.Submitted;
@@ -192,6 +216,91 @@ public sealed class PaytrPaymentService : IPaytrPaymentService
         payment.SetUpdatedInfo();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return ApiResponse<string>.SuccessResult("OK", "PayTR callback işlendi.");
+    }
+
+    private async Task<PaymentOrder> GetOrCreatePaymentOrderAsync(B2bOrder order, string providerKey, string paymentMethod, CancellationToken cancellationToken)
+    {
+        var existing = await _paymentOrders.Query(tracking: true)
+            .Include(x => x.Installments.Where(i => !i.IsDeleted))
+            .FirstOrDefaultAsync(x => x.OrderId == order.Id && !x.IsDeleted && x.Status != B2bWorkflowStatuses.Cancelled, cancellationToken);
+        if (existing != null)
+        {
+            return existing;
+        }
+
+        var customer = await _customers.Query()
+            .FirstOrDefaultAsync(x => x.Id == order.CustomerId && !x.IsDeleted, cancellationToken);
+        var termDays = customer?.PaymentTermDays ?? 0;
+        var dueDate = DateTimeProvider.Now.Date.AddDays(Math.Max(0, (int)termDays));
+        var paymentOrder = new PaymentOrder
+        {
+            PaymentOrderNumber = $"PO-{order.Id}-{DateTimeProvider.Now:yyyyMMddHHmmssfff}",
+            OrderId = order.Id,
+            CustomerId = order.CustomerId,
+            BuyerId = order.BuyerId,
+            UserId = order.UserId,
+            Status = B2bWorkflowStatuses.Pending,
+            Amount = order.GrandTotal,
+            PaidAmount = 0,
+            RemainingAmount = order.GrandTotal,
+            CurrencyCode = order.CurrencyCode,
+            PaymentTermDays = termDays,
+            DueDate = dueDate,
+            InstallmentCount = 1,
+            ProviderKey = providerKey,
+            PaymentMethod = paymentMethod,
+            CreatedDate = DateTimeProvider.Now,
+            UpdatedDate = DateTimeProvider.Now
+        };
+        paymentOrder.Installments.Add(new PaymentInstallment
+        {
+            InstallmentNumber = 1,
+            Status = B2bWorkflowStatuses.Pending,
+            DueDate = dueDate,
+            Amount = order.GrandTotal,
+            PaidAmount = 0,
+            CreatedDate = DateTimeProvider.Now,
+            UpdatedDate = DateTimeProvider.Now
+        });
+
+        await _paymentOrders.AddAsync(paymentOrder, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return paymentOrder;
+    }
+
+    private async Task ApplyPaymentOrderCompletionAsync(PaymentTransaction payment, CancellationToken cancellationToken)
+    {
+        if (!payment.PaymentOrderId.HasValue)
+        {
+            return;
+        }
+
+        var paymentOrder = await _paymentOrders.Query(tracking: true)
+            .Include(x => x.Installments.Where(i => !i.IsDeleted))
+            .FirstOrDefaultAsync(x => x.Id == payment.PaymentOrderId.Value && !x.IsDeleted, cancellationToken);
+        if (paymentOrder == null)
+        {
+            return;
+        }
+
+        var collectedAmount = payment.ProviderCollectedAmount ?? payment.Amount;
+        paymentOrder.PaidAmount = Math.Min(paymentOrder.Amount, paymentOrder.PaidAmount + collectedAmount);
+        paymentOrder.RemainingAmount = Math.Max(0, paymentOrder.Amount - paymentOrder.PaidAmount);
+        paymentOrder.Status = paymentOrder.RemainingAmount <= 0 ? B2bWorkflowStatuses.Completed : B2bWorkflowStatuses.Processing;
+        paymentOrder.SetUpdatedInfo();
+
+        var targetInstallment = payment.PaymentInstallmentId.HasValue
+            ? paymentOrder.Installments.FirstOrDefault(x => x.Id == payment.PaymentInstallmentId.Value)
+            : paymentOrder.Installments.Where(x => !x.IsDeleted).OrderBy(x => x.InstallmentNumber).FirstOrDefault(x => x.Status != B2bWorkflowStatuses.Completed);
+        if (targetInstallment == null)
+        {
+            return;
+        }
+
+        targetInstallment.PaidAmount = Math.Min(targetInstallment.Amount, targetInstallment.PaidAmount + collectedAmount);
+        targetInstallment.Status = targetInstallment.PaidAmount >= targetInstallment.Amount ? B2bWorkflowStatuses.Completed : B2bWorkflowStatuses.Processing;
+        targetInstallment.PaidDate = targetInstallment.Status == B2bWorkflowStatuses.Completed ? DateTimeProvider.Now : targetInstallment.PaidDate;
+        targetInstallment.SetUpdatedInfo();
     }
 
     private bool HasCredentials()
@@ -253,10 +362,43 @@ public sealed class PaytrPaymentService : IPaytrPaymentService
         return ((int)Math.Round(amount * 100m, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
     }
 
+    private static decimal? ParseMinorUnitToAmount(string value)
+    {
+        return decimal.TryParse(value, NumberStyles.Number, CultureInfo.InvariantCulture, out var minorUnit)
+            ? Math.Round(minorUnit / 100m, 4)
+            : null;
+    }
+
     private static string ToPaytrCurrency(string currencyCode)
     {
         var value = string.IsNullOrWhiteSpace(currencyCode) ? "TL" : currencyCode.Trim().ToUpperInvariant();
         return value is "TRY" ? "TL" : value;
+    }
+
+    private static string NormalizePaytrCurrency(string value, string fallback)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return fallback;
+        }
+
+        var normalized = value.Trim().ToUpperInvariant();
+        return normalized == "TL" ? "TRY" : normalized;
+    }
+
+    private static string BuildInstallmentPlanJson(IEnumerable<PaymentInstallment> installments)
+    {
+        return JsonSerializer.Serialize(installments
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.InstallmentNumber)
+            .Select(x => new
+            {
+                x.InstallmentNumber,
+                x.DueDate,
+                x.Amount,
+                x.PaidAmount,
+                x.Status
+            }), JsonOptions);
     }
 
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

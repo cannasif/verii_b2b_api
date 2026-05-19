@@ -1,8 +1,10 @@
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Wms.Application.B2B.Dtos;
 using Wms.Application.Common;
 using Wms.Domain.Common;
 using Wms.Domain.Entities.B2B;
+using CustomerEntity = Wms.Domain.Entities.Customer.Customer;
 
 namespace Wms.Application.B2B.Services;
 
@@ -15,6 +17,9 @@ public sealed class B2bCommerceService : IB2bCommerceService
     private readonly IRepository<B2bCartLine> _cartLines;
     private readonly IRepository<B2bOrder> _orders;
     private readonly IRepository<B2bOrderLine> _orderLines;
+    private readonly IRepository<CustomerEntity> _customers;
+    private readonly IRepository<PaymentOrder> _paymentOrders;
+    private readonly IRepository<PaymentInstallment> _paymentInstallments;
     private readonly IRepository<PaymentTransaction> _payments;
     private readonly IRepository<QuoteRequest> _quotes;
     private readonly IRepository<InventorySnapshot> _inventory;
@@ -29,6 +34,9 @@ public sealed class B2bCommerceService : IB2bCommerceService
         IRepository<B2bCartLine> cartLines,
         IRepository<B2bOrder> orders,
         IRepository<B2bOrderLine> orderLines,
+        IRepository<CustomerEntity> customers,
+        IRepository<PaymentOrder> paymentOrders,
+        IRepository<PaymentInstallment> paymentInstallments,
         IRepository<PaymentTransaction> payments,
         IRepository<QuoteRequest> quotes,
         IRepository<InventorySnapshot> inventory,
@@ -42,6 +50,9 @@ public sealed class B2bCommerceService : IB2bCommerceService
         _cartLines = cartLines;
         _orders = orders;
         _orderLines = orderLines;
+        _customers = customers;
+        _paymentOrders = paymentOrders;
+        _paymentInstallments = paymentInstallments;
         _payments = payments;
         _quotes = quotes;
         _inventory = inventory;
@@ -732,15 +743,32 @@ public sealed class B2bCommerceService : IB2bCommerceService
 
     public async Task<ApiResponse<PaymentTransactionDto>> CreatePaymentTransactionAsync(CreatePaymentTransactionDto dto, CancellationToken cancellationToken = default)
     {
+        var paymentOrder = dto.PaymentOrderId.HasValue
+            ? await _paymentOrders.Query(tracking: true)
+                .Include(x => x.Installments.Where(i => !i.IsDeleted))
+                .FirstOrDefaultAsync(x => x.Id == dto.PaymentOrderId.Value && !x.IsDeleted, cancellationToken)
+            : null;
+
+        var installment = dto.PaymentInstallmentId.HasValue
+            ? await _paymentInstallments.Query(tracking: true)
+                .FirstOrDefaultAsync(x => x.Id == dto.PaymentInstallmentId.Value && !x.IsDeleted, cancellationToken)
+            : null;
+
         var payment = new PaymentTransaction
         {
             OrderId = dto.OrderId,
+            PaymentOrderId = paymentOrder?.Id ?? dto.PaymentOrderId,
+            PaymentInstallmentId = installment?.Id ?? dto.PaymentInstallmentId,
             ProviderKey = Normalize(dto.ProviderKey),
             ExternalTransactionId = Trim(dto.ExternalTransactionId),
             Status = B2bWorkflowStatuses.Pending,
             Amount = dto.Amount,
             CurrencyCode = NormalizeCurrency(dto.CurrencyCode),
             PaymentMethod = Trim(dto.PaymentMethod),
+            DueDate = dto.DueDate ?? installment?.DueDate ?? paymentOrder?.DueDate,
+            PaymentTermDays = dto.PaymentTermDays ?? paymentOrder?.PaymentTermDays,
+            InstallmentCount = Math.Max(1, dto.InstallmentCount > 0 ? dto.InstallmentCount : paymentOrder?.InstallmentCount ?? 1),
+            InstallmentPlanJson = dto.InstallmentPlanJson ?? (paymentOrder is null ? null : BuildInstallmentPlanJson(paymentOrder.Installments)),
             RequestedDate = DateTimeProvider.Now
         };
         await _payments.AddAsync(payment, cancellationToken);
@@ -775,9 +803,125 @@ public sealed class B2bCommerceService : IB2bCommerceService
         payment.ExternalTransactionId = dto.ExternalTransactionId ?? payment.ExternalTransactionId;
         payment.CallbackPayloadJson = dto.CallbackPayloadJson ?? payment.CallbackPayloadJson;
         payment.CompletedDate = IsFinalPaymentStatus(payment.Status) ? DateTimeProvider.Now : payment.CompletedDate;
+        if (string.Equals(payment.Status, B2bWorkflowStatuses.Completed, StringComparison.OrdinalIgnoreCase))
+        {
+            await ApplyPaymentCompletionAsync(payment, cancellationToken);
+        }
         payment.SetUpdatedInfo();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return ApiResponse<PaymentTransactionDto>.SuccessResult(MapPayment(payment), "Payment status updated successfully");
+    }
+
+    public async Task<ApiResponse<PagedResponse<PaymentOrderDto>>> GetPaymentOrdersAsync(PagedRequest request, CancellationToken cancellationToken = default)
+    {
+        request ??= new PagedRequest();
+        var query = _paymentOrders.Query()
+            .Include(x => x.Installments.Where(i => !i.IsDeleted))
+            .Where(x => !x.IsDeleted)
+            .OrderByDescending(x => x.Id);
+
+        var total = await query.CountAsync(cancellationToken);
+        var pageNumber = request.PageNumber < 1 ? 1 : request.PageNumber;
+        var pageSize = request.PageSize < 1 ? 20 : request.PageSize;
+        var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+
+        return ApiResponse<PagedResponse<PaymentOrderDto>>.SuccessResult(
+            new PagedResponse<PaymentOrderDto>(items.Select(MapPaymentOrder).ToList(), total, pageNumber, pageSize),
+            "Payment orders retrieved successfully");
+    }
+
+    public async Task<ApiResponse<PaymentOrderDto>> CreatePaymentOrderAsync(CreatePaymentOrderDto dto, CancellationToken cancellationToken = default)
+    {
+        var order = await _orders.Query()
+            .FirstOrDefaultAsync(x => x.Id == dto.OrderId && !x.IsDeleted, cancellationToken);
+        if (order == null)
+        {
+            return ApiResponse<PaymentOrderDto>.ErrorResult("Order not found", statusCode: 404);
+        }
+
+        var existing = await _paymentOrders.Query(tracking: true)
+            .Include(x => x.Installments.Where(i => !i.IsDeleted))
+            .FirstOrDefaultAsync(x => x.OrderId == order.Id && !x.IsDeleted && x.Status != B2bWorkflowStatuses.Cancelled, cancellationToken);
+        if (existing != null)
+        {
+            return ApiResponse<PaymentOrderDto>.SuccessResult(MapPaymentOrder(existing), "Payment order already exists");
+        }
+
+        var customer = await _customers.Query()
+            .FirstOrDefaultAsync(x => x.Id == order.CustomerId && !x.IsDeleted, cancellationToken);
+        var termDays = dto.PaymentTermDays ?? customer?.PaymentTermDays ?? 0;
+        var dueDate = ResolveDueDate(dto.DueDate, termDays);
+        var installmentCount = Math.Max(1, dto.InstallmentCount);
+
+        var paymentOrder = new PaymentOrder
+        {
+            PaymentOrderNumber = BuildPaymentOrderNumber(order.Id),
+            OrderId = order.Id,
+            CustomerId = order.CustomerId,
+            BuyerId = order.BuyerId,
+            UserId = order.UserId,
+            Status = B2bWorkflowStatuses.Pending,
+            Amount = order.GrandTotal,
+            PaidAmount = 0,
+            RemainingAmount = order.GrandTotal,
+            CurrencyCode = NormalizeCurrency(order.CurrencyCode),
+            PaymentTermDays = termDays,
+            DueDate = dueDate,
+            IsDueDateOverridden = dto.DueDate.HasValue,
+            InstallmentCount = installmentCount,
+            PaymentMethod = Trim(dto.PaymentMethod),
+            ProviderKey = Trim(dto.ProviderKey)?.ToUpperInvariant(),
+            Notes = Trim(dto.Notes),
+            CreatedDate = DateTimeProvider.Now,
+            UpdatedDate = DateTimeProvider.Now
+        };
+
+        foreach (var installment in BuildInstallments(paymentOrder.Amount, dueDate, installmentCount))
+        {
+            paymentOrder.Installments.Add(installment);
+        }
+
+        await _paymentOrders.AddAsync(paymentOrder, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<PaymentOrderDto>.SuccessResult(MapPaymentOrder(paymentOrder), "Payment order created successfully");
+    }
+
+    public async Task<ApiResponse<PaymentOrderDto>> UpdatePaymentOrderPlanAsync(long id, UpdatePaymentOrderPlanDto dto, CancellationToken cancellationToken = default)
+    {
+        var paymentOrder = await _paymentOrders.Query(tracking: true)
+            .Include(x => x.Installments.Where(i => !i.IsDeleted))
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (paymentOrder == null)
+        {
+            return ApiResponse<PaymentOrderDto>.ErrorResult("Payment order not found", statusCode: 404);
+        }
+
+        if (paymentOrder.PaidAmount > 0)
+        {
+            return ApiResponse<PaymentOrderDto>.ErrorResult("Paid payment order plan cannot be changed", statusCode: 400);
+        }
+
+        var termDays = dto.PaymentTermDays ?? paymentOrder.PaymentTermDays ?? 0;
+        var dueDate = ResolveDueDate(dto.DueDate, termDays);
+        var installmentCount = Math.Max(1, dto.InstallmentCount);
+
+        _paymentInstallments.SoftDeleteRange(paymentOrder.Installments.Select(x => x.Id));
+        paymentOrder.Installments.Clear();
+        foreach (var installment in BuildInstallments(paymentOrder.Amount, dueDate, installmentCount))
+        {
+            paymentOrder.Installments.Add(installment);
+        }
+
+        paymentOrder.PaymentTermDays = termDays;
+        paymentOrder.DueDate = dueDate;
+        paymentOrder.IsDueDateOverridden = dto.DueDate.HasValue;
+        paymentOrder.InstallmentCount = installmentCount;
+        paymentOrder.PaymentMethod = Trim(dto.PaymentMethod) ?? paymentOrder.PaymentMethod;
+        paymentOrder.ProviderKey = Trim(dto.ProviderKey)?.ToUpperInvariant() ?? paymentOrder.ProviderKey;
+        paymentOrder.Notes = Trim(dto.Notes) ?? paymentOrder.Notes;
+        paymentOrder.SetUpdatedInfo();
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<PaymentOrderDto>.SuccessResult(MapPaymentOrder(paymentOrder), "Payment order plan updated successfully");
     }
 
     private async Task<B2bCart> GetOrCreateDraftCart(long customerId, long? userId, long? buyerId, string currencyCode, CancellationToken cancellationToken)
@@ -1065,15 +1209,182 @@ public sealed class B2bCommerceService : IB2bCommerceService
         CreatedDate = entity.CreatedDate,
         UpdatedDate = entity.UpdatedDate,
         OrderId = entity.OrderId,
+        PaymentOrderId = entity.PaymentOrderId,
+        PaymentInstallmentId = entity.PaymentInstallmentId,
         ProviderKey = entity.ProviderKey,
         ExternalTransactionId = entity.ExternalTransactionId,
         Status = entity.Status,
         Amount = entity.Amount,
+        ProviderPaymentAmount = entity.ProviderPaymentAmount,
+        ProviderCollectedAmount = entity.ProviderCollectedAmount,
         CurrencyCode = entity.CurrencyCode,
         PaymentMethod = entity.PaymentMethod,
+        DueDate = entity.DueDate,
+        PaymentTermDays = entity.PaymentTermDays,
+        InstallmentCount = entity.InstallmentCount,
+        InstallmentPlanJson = entity.InstallmentPlanJson,
         RequestedDate = entity.RequestedDate,
         CompletedDate = entity.CompletedDate
     };
+
+    private static PaymentOrderDto MapPaymentOrder(PaymentOrder entity) => new()
+    {
+        Id = entity.Id,
+        BranchCode = entity.BranchCode,
+        CreatedDate = entity.CreatedDate,
+        UpdatedDate = entity.UpdatedDate,
+        PaymentOrderNumber = entity.PaymentOrderNumber,
+        OrderId = entity.OrderId,
+        CustomerId = entity.CustomerId,
+        BuyerId = entity.BuyerId,
+        UserId = entity.UserId,
+        Status = entity.Status,
+        Amount = entity.Amount,
+        PaidAmount = entity.PaidAmount,
+        RemainingAmount = entity.RemainingAmount,
+        CurrencyCode = entity.CurrencyCode,
+        PaymentTermDays = entity.PaymentTermDays,
+        DueDate = entity.DueDate,
+        IsDueDateOverridden = entity.IsDueDateOverridden,
+        InstallmentCount = entity.InstallmentCount,
+        PaymentMethod = entity.PaymentMethod,
+        ProviderKey = entity.ProviderKey,
+        Notes = entity.Notes,
+        Installments = entity.Installments
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.InstallmentNumber)
+            .Select(MapPaymentInstallment)
+            .ToList()
+    };
+
+    private static PaymentInstallmentDto MapPaymentInstallment(PaymentInstallment entity) => new()
+    {
+        Id = entity.Id,
+        BranchCode = entity.BranchCode,
+        CreatedDate = entity.CreatedDate,
+        UpdatedDate = entity.UpdatedDate,
+        PaymentOrderId = entity.PaymentOrderId,
+        InstallmentNumber = entity.InstallmentNumber,
+        Status = entity.Status,
+        DueDate = entity.DueDate,
+        Amount = entity.Amount,
+        PaidAmount = entity.PaidAmount,
+        PaidDate = entity.PaidDate,
+        Notes = entity.Notes
+    };
+
+    private async Task ApplyPaymentCompletionAsync(PaymentTransaction payment, CancellationToken cancellationToken)
+    {
+        if (!payment.PaymentOrderId.HasValue)
+        {
+            return;
+        }
+
+        var paymentOrder = await _paymentOrders.Query(tracking: true)
+            .Include(x => x.Installments.Where(i => !i.IsDeleted))
+            .FirstOrDefaultAsync(x => x.Id == payment.PaymentOrderId.Value && !x.IsDeleted, cancellationToken);
+        if (paymentOrder == null)
+        {
+            return;
+        }
+
+        var collectedAmount = payment.ProviderCollectedAmount ?? payment.Amount;
+        paymentOrder.PaidAmount = Math.Min(paymentOrder.Amount, paymentOrder.PaidAmount + collectedAmount);
+        paymentOrder.RemainingAmount = Math.Max(0, paymentOrder.Amount - paymentOrder.PaidAmount);
+        paymentOrder.Status = paymentOrder.RemainingAmount <= 0 ? B2bWorkflowStatuses.Completed : B2bWorkflowStatuses.Processing;
+        paymentOrder.SetUpdatedInfo();
+
+        if (payment.PaymentInstallmentId.HasValue)
+        {
+            var installment = paymentOrder.Installments.FirstOrDefault(x => x.Id == payment.PaymentInstallmentId.Value);
+            if (installment != null)
+            {
+                installment.PaidAmount = Math.Min(installment.Amount, installment.PaidAmount + collectedAmount);
+                installment.Status = installment.PaidAmount >= installment.Amount ? B2bWorkflowStatuses.Completed : B2bWorkflowStatuses.Processing;
+                installment.PaidDate = installment.Status == B2bWorkflowStatuses.Completed ? DateTimeProvider.Now : installment.PaidDate;
+                installment.SetUpdatedInfo();
+            }
+        }
+        else
+        {
+            AllocatePaymentToInstallments(paymentOrder.Installments.Where(x => !x.IsDeleted).OrderBy(x => x.InstallmentNumber), collectedAmount);
+        }
+    }
+
+    private static void AllocatePaymentToInstallments(IEnumerable<PaymentInstallment> installments, decimal amount)
+    {
+        var remaining = amount;
+        foreach (var installment in installments)
+        {
+            if (remaining <= 0)
+            {
+                return;
+            }
+
+            var openAmount = Math.Max(0, installment.Amount - installment.PaidAmount);
+            if (openAmount <= 0)
+            {
+                continue;
+            }
+
+            var paid = Math.Min(openAmount, remaining);
+            installment.PaidAmount += paid;
+            installment.Status = installment.PaidAmount >= installment.Amount ? B2bWorkflowStatuses.Completed : B2bWorkflowStatuses.Processing;
+            installment.PaidDate = installment.Status == B2bWorkflowStatuses.Completed ? DateTimeProvider.Now : installment.PaidDate;
+            installment.SetUpdatedInfo();
+            remaining -= paid;
+        }
+    }
+
+    private static List<PaymentInstallment> BuildInstallments(decimal amount, DateTime dueDate, int installmentCount)
+    {
+        installmentCount = Math.Max(1, installmentCount);
+        var installments = new List<PaymentInstallment>(installmentCount);
+        var baseAmount = Math.Round(amount / installmentCount, 4);
+        var allocated = 0m;
+        for (var i = 1; i <= installmentCount; i++)
+        {
+            var installmentAmount = i == installmentCount ? amount - allocated : baseAmount;
+            allocated += installmentAmount;
+            installments.Add(new PaymentInstallment
+            {
+                InstallmentNumber = i,
+                Status = B2bWorkflowStatuses.Pending,
+                DueDate = dueDate.Date.AddMonths(i - 1),
+                Amount = installmentAmount,
+                PaidAmount = 0,
+                CreatedDate = DateTimeProvider.Now,
+                UpdatedDate = DateTimeProvider.Now
+            });
+        }
+
+        return installments;
+    }
+
+    private static DateTime ResolveDueDate(DateTime? requestedDueDate, short? paymentTermDays)
+    {
+        return requestedDueDate?.Date ?? DateTimeProvider.Now.Date.AddDays(Math.Max(0, (int)(paymentTermDays ?? 0)));
+    }
+
+    private static string BuildPaymentOrderNumber(long orderId)
+    {
+        return $"PO-{orderId}-{DateTimeProvider.Now:yyyyMMddHHmmssfff}";
+    }
+
+    private static string BuildInstallmentPlanJson(IEnumerable<PaymentInstallment> installments)
+    {
+        return JsonSerializer.Serialize(installments
+            .Where(x => !x.IsDeleted)
+            .OrderBy(x => x.InstallmentNumber)
+            .Select(x => new
+            {
+                x.InstallmentNumber,
+                x.DueDate,
+                x.Amount,
+                x.PaidAmount,
+                x.Status
+            }));
+    }
 
     private static string Normalize(string value) => value.Trim().ToUpperInvariant();
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();

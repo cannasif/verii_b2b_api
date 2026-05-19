@@ -45,6 +45,8 @@ public sealed class WmsDbContext : DbContext
     public DbSet<B2bCartLine> B2bCartLines => Set<B2bCartLine>();
     public DbSet<B2bOrder> B2bOrders => Set<B2bOrder>();
     public DbSet<B2bOrderLine> B2bOrderLines => Set<B2bOrderLine>();
+    public DbSet<PaymentOrder> PaymentOrders => Set<PaymentOrder>();
+    public DbSet<PaymentInstallment> PaymentInstallments => Set<PaymentInstallment>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<CustomerPriceList> CustomerPriceLists => Set<CustomerPriceList>();
     public DbSet<CustomerPriceListItem> CustomerPriceListItems => Set<CustomerPriceListItem>();
