@@ -94,6 +94,52 @@ public sealed class B2bPortalAccessService : IB2bPortalAccessService
         }, "Portal oturumu oluşturuldu");
     }
 
+    public async Task<ApiResponse<B2bPortalSessionDto>> CreateSessionForUserAsync(long userId, CancellationToken cancellationToken = default)
+    {
+        var buyer = await _buyers.Query()
+            .Include(x => x.Company)
+            .Where(x => !x.IsDeleted && x.IsActive && x.UserId == userId)
+            .OrderByDescending(x => x.Id)
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (buyer?.Company is null || buyer.Company.IsDeleted || buyer.Company.Status == "Passive" || !buyer.Company.CustomerId.HasValue || buyer.Company.CustomerId.Value <= 0)
+        {
+            return ApiResponse<B2bPortalSessionDto>.ErrorResult("Bu kullanıcıya bağlı aktif B2B alıcı profili bulunamadı", statusCode: 404);
+        }
+
+        return CreateSessionFromCompanyAndBuyer(buyer.Company, buyer);
+    }
+
+    private ApiResponse<B2bPortalSessionDto> CreateSessionFromCompanyAndBuyer(B2bCompany company, B2bBuyer? buyer)
+    {
+        var canViewCompanyHistory = buyer is null || CanViewCompanyHistory(buyer.RoleCode);
+        var expiresAt = _timeProvider.GetUtcNow().UtcDateTime.AddHours(8);
+        var token = CreateToken(new B2bPortalTokenPayload
+        {
+            CompanyId = company.Id,
+            CompanyCode = company.CompanyCode,
+            CustomerId = company.CustomerId!.Value,
+            CustomerGroupCode = company.CustomerGroupCode,
+            BuyerId = buyer?.Id,
+            UserId = buyer?.UserId,
+            BuyerEmail = buyer?.Email,
+            BuyerName = buyer?.FullName,
+            RoleCode = buyer?.RoleCode ?? "CompanyAdmin",
+            CanViewCompanyHistory = canViewCompanyHistory,
+            ExpiresAtUnix = new DateTimeOffset(expiresAt).ToUnixTimeSeconds()
+        });
+
+        return ApiResponse<B2bPortalSessionDto>.SuccessResult(new B2bPortalSessionDto
+        {
+            Token = token,
+            ExpiresAt = expiresAt,
+            Company = MapCompany(company),
+            Buyer = buyer is null ? null : MapBuyer(buyer),
+            Scope = canViewCompanyHistory ? "Company" : "Buyer",
+            CanViewCompanyHistory = canViewCompanyHistory
+        }, "Portal oturumu oluşturuldu");
+    }
+
     public async Task<ApiResponse<long>> ValidateRequestAsync(HttpRequest request, CancellationToken cancellationToken = default)
     {
         if (request.HttpContext.User.Identity?.IsAuthenticated == true)

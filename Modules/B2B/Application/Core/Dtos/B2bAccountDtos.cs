@@ -73,8 +73,8 @@ public sealed class CreateB2bBuyerDto
 {
     public long CompanyId { get; set; }
     public long? UserId { get; set; }
-    [Required, StringLength(180)] public string Email { get; set; } = string.Empty;
-    [Required, StringLength(180)] public string FullName { get; set; } = string.Empty;
+    [StringLength(180)] public string? Email { get; set; }
+    [StringLength(180)] public string? FullName { get; set; }
     [StringLength(60)] public string RoleCode { get; set; } = "Buyer";
     public decimal? OrderLimit { get; set; }
     public bool RequiresApproval { get; set; }

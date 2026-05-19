@@ -79,6 +79,11 @@ public sealed class CreateUserDto
     public long RoleId { get; set; }
     public bool? IsActive { get; set; }
     public List<long>? PermissionGroupIds { get; set; }
+    [StringLength(30)] public string? AccountType { get; set; }
+    public long? B2bCompanyId { get; set; }
+    [StringLength(60)] public string? B2bBuyerRoleCode { get; set; }
+    public decimal? B2bOrderLimit { get; set; }
+    public bool? B2bRequiresApproval { get; set; }
 }
 
 public sealed class UpdateUserDto
@@ -91,4 +96,9 @@ public sealed class UpdateUserDto
     public long? RoleId { get; set; }
     public bool? IsActive { get; set; }
     public List<long>? PermissionGroupIds { get; set; }
+    [StringLength(30)] public string? AccountType { get; set; }
+    public long? B2bCompanyId { get; set; }
+    [StringLength(60)] public string? B2bBuyerRoleCode { get; set; }
+    public decimal? B2bOrderLimit { get; set; }
+    public bool? B2bRequiresApproval { get; set; }
 }

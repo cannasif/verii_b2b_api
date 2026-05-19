@@ -3,6 +3,7 @@ using Wms.Application.B2B.Dtos;
 using Wms.Application.Common;
 using Wms.Domain.Common;
 using Wms.Domain.Entities.B2B;
+using Wms.Domain.Entities.Identity;
 
 namespace Wms.Application.B2B.Services;
 
@@ -10,6 +11,7 @@ public sealed class B2bAccountService : IB2bAccountService
 {
     private readonly IRepository<B2bCompany> _companies;
     private readonly IRepository<B2bBuyer> _buyers;
+    private readonly IRepository<User> _users;
     private readonly IRepository<CatalogVisibilityRule> _visibilityRules;
     private readonly IRepository<ShoppingList> _shoppingLists;
     private readonly IRepository<PurchaseApprovalRule> _approvalRules;
@@ -18,6 +20,7 @@ public sealed class B2bAccountService : IB2bAccountService
     public B2bAccountService(
         IRepository<B2bCompany> companies,
         IRepository<B2bBuyer> buyers,
+        IRepository<User> users,
         IRepository<CatalogVisibilityRule> visibilityRules,
         IRepository<ShoppingList> shoppingLists,
         IRepository<PurchaseApprovalRule> approvalRules,
@@ -25,6 +28,7 @@ public sealed class B2bAccountService : IB2bAccountService
     {
         _companies = companies;
         _buyers = buyers;
+        _users = users;
         _visibilityRules = visibilityRules;
         _shoppingLists = shoppingLists;
         _approvalRules = approvalRules;
@@ -87,12 +91,42 @@ public sealed class B2bAccountService : IB2bAccountService
 
     public async Task<ApiResponse<B2bBuyerDto>> CreateBuyerAsync(CreateB2bBuyerDto dto, CancellationToken cancellationToken = default)
     {
+        var companyExists = await _companies.Query().AnyAsync(x => !x.IsDeleted && x.Id == dto.CompanyId, cancellationToken);
+        if (!companyExists)
+        {
+            return ApiResponse<B2bBuyerDto>.ErrorResult("B2B şirket hesabı bulunamadı.", statusCode: 404);
+        }
+
+        User? user = null;
+        if (dto.UserId.HasValue)
+        {
+            user = await _users.Query().FirstOrDefaultAsync(x => !x.IsDeleted && x.Id == dto.UserId.Value, cancellationToken);
+            if (user is null)
+            {
+                return ApiResponse<B2bBuyerDto>.ErrorResult("Bağlanacak kullanıcı bulunamadı.", statusCode: 404);
+            }
+        }
+
+        var email = string.IsNullOrWhiteSpace(dto.Email) ? user?.Email : dto.Email;
+        var fullName = string.IsNullOrWhiteSpace(dto.FullName) ? user?.FullName : dto.FullName;
+        if (string.IsNullOrWhiteSpace(email) || string.IsNullOrWhiteSpace(fullName))
+        {
+            return ApiResponse<B2bBuyerDto>.ErrorResult("Alıcı için kullanıcı, e-posta ve ad soyad bilgisi zorunludur.", statusCode: 400);
+        }
+
+        var normalizedEmail = email.Trim().ToLowerInvariant();
+        var exists = await _buyers.Query().AnyAsync(x => !x.IsDeleted && x.CompanyId == dto.CompanyId && x.Email == normalizedEmail, cancellationToken);
+        if (exists)
+        {
+            return ApiResponse<B2bBuyerDto>.ErrorResult("Bu şirkette aynı e-posta ile alıcı zaten var.", statusCode: 400);
+        }
+
         var buyer = new B2bBuyer
         {
             CompanyId = dto.CompanyId,
             UserId = dto.UserId,
-            Email = dto.Email.Trim().ToLowerInvariant(),
-            FullName = dto.FullName.Trim(),
+            Email = normalizedEmail,
+            FullName = fullName.Trim(),
             RoleCode = NormalizeStatus(dto.RoleCode, "Buyer"),
             OrderLimit = dto.OrderLimit,
             RequiresApproval = dto.RequiresApproval,
