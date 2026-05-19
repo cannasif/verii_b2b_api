@@ -58,13 +58,25 @@ public static class ServiceCollectionExtensions
         services.AddNetsisIntegrationsModule(configuration);
 
         var corsOptions = configuration.GetSection("Cors").Get<PragmaticCorsOptions>() ?? new PragmaticCorsOptions();
+        var allowedOrigins = corsOptions.AllowedOrigins
+            .Concat(new[]
+            {
+                "https://b2b.v3rii.com",
+                "http://b2b.v3rii.com",
+                "https://www.b2b.v3rii.com",
+                "http://www.b2b.v3rii.com"
+            })
+            .Where(origin => !string.IsNullOrWhiteSpace(origin))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
         services.AddCors(options =>
         {
             options.AddPolicy("PragmaticCors", policy =>
             {
-                if (corsOptions.AllowedOrigins.Count > 0)
+                if (allowedOrigins.Length > 0)
                 {
-                    policy.WithOrigins(corsOptions.AllowedOrigins.ToArray())
+                    policy.WithOrigins(allowedOrigins)
                         .AllowAnyHeader()
                         .AllowAnyMethod()
                         .AllowCredentials();
