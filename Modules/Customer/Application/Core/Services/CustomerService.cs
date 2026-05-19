@@ -210,6 +210,7 @@ public sealed class CustomerService : ICustomerService
         entity.GroupCode = item.GroupCode?.Trim();
         entity.CreditLimit = item.CreditLimit;
         entity.PriceListNumber = item.PriceListNumber;
+        entity.PaymentTermDays = item.PaymentTermDays;
         entity.BranchCode = NormalizeBranchCode(item.BranchCode);
         entity.BusinessUnitCode = item.BusinessUnitCode;
         entity.Email = item.Email?.Trim();

@@ -36,7 +36,8 @@ public sealed class CustomerErpReadService : ICustomerErpReadService
                     CariIsim = GetNullableString(reader, "CARI_ISIM"),
                     GroupCode = GetNullableString(reader, "GRUP_KODU"),
                     CreditLimit = GetNullableValue<decimal>(reader, "RISK_SINIRI"),
-                    PriceListNumber = GetNullableValue<short>(reader, "LISTE_FIATI")
+                    PriceListNumber = GetNullableValue<short>(reader, "LISTE_FIATI"),
+                    PaymentTermDays = GetNullableValue<short>(reader, "VADE_GUNU")
                 },
             cancellationToken);
     }

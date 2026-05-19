@@ -9,4 +9,5 @@ public sealed class FnCustomerRow
     public string? GroupCode { get; set; }
     public decimal? CreditLimit { get; set; }
     public short? PriceListNumber { get; set; }
+    public short? PaymentTermDays { get; set; }
 }

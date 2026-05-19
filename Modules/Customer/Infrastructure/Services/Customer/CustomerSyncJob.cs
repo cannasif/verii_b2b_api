@@ -37,6 +37,7 @@ public sealed class CustomerSyncJob : ICustomerSyncJob
                     GroupCode = x.GroupCode?.Trim(),
                     CreditLimit = x.CreditLimit,
                     PriceListNumber = x.PriceListNumber,
+                    PaymentTermDays = x.PaymentTermDays,
                     BranchCode = x.SubeKodu?.ToString() ?? "0",
                     BusinessUnitCode = x.IsletmeKodu
                 })

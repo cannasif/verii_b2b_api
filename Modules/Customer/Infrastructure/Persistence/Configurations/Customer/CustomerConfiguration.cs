@@ -20,6 +20,7 @@ public sealed class CustomerConfiguration : BaseEntityConfiguration<CustomerEnti
         builder.Property(x => x.GroupCode).HasMaxLength(50);
         builder.Property(x => x.CreditLimit).HasColumnType("decimal(18,6)");
         builder.Property(x => x.PriceListNumber);
+        builder.Property(x => x.PaymentTermDays);
         builder.Property(x => x.Email).HasMaxLength(100);
         builder.Property(x => x.Website).HasMaxLength(100);
         builder.Property(x => x.Phone1).HasMaxLength(100);
