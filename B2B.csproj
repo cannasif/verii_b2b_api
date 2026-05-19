@@ -5,7 +5,7 @@
     <Nullable>enable</Nullable>
     <UseAppHost>false</UseAppHost>
     <NuGetAudit>false</NuGetAudit>
-    <AssemblyName>Verii.B2B.Api</AssemblyName>
+    <AssemblyName>B2B</AssemblyName>
     <RootNamespace>Wms</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
