@@ -12,7 +12,10 @@ public sealed class CatalogVariantConfiguration : BaseEntityConfiguration<Catalo
         builder.ToTable("RII_B2B_CATALOG_VARIANT");
         builder.Property(x => x.VariantSku).HasMaxLength(80).IsRequired();
         builder.Property(x => x.VariantName).HasMaxLength(250).IsRequired();
+        builder.Property(x => x.Barcode).HasMaxLength(80);
+        builder.Property(x => x.Unit).HasMaxLength(30);
         builder.Property(x => x.AttributesJson).HasColumnType("nvarchar(max)");
+        builder.Property(x => x.MediaGalleryJson).HasColumnType("nvarchar(max)");
 
         builder.HasIndex(x => x.CatalogProductId).HasDatabaseName("IX_B2B_CatalogVariant_ProductId");
         builder.HasIndex(x => x.VariantSku).HasDatabaseName("IX_B2B_CatalogVariant_Sku").IsUnique().HasFilter("[IsDeleted] = 0");

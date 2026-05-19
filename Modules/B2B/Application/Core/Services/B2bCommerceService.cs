@@ -85,7 +85,15 @@ public sealed class B2bCommerceService : IB2bCommerceService
         if (!string.IsNullOrWhiteSpace(request.Search))
         {
             var search = request.Search.Trim();
-            query = query.Where(x => x.Sku.Contains(search) || x.Name.Contains(search) || (x.SearchText != null && x.SearchText.Contains(search)));
+            query = query.Where(x =>
+                x.Sku.Contains(search) ||
+                x.Name.Contains(search) ||
+                (x.Brand != null && x.Brand.Contains(search)) ||
+                (x.ManufacturerCode != null && x.ManufacturerCode.Contains(search)) ||
+                (x.Barcode != null && x.Barcode.Contains(search)) ||
+                (x.CategoryPath != null && x.CategoryPath.Contains(search)) ||
+                (x.SearchKeywords != null && x.SearchKeywords.Contains(search)) ||
+                (x.SearchText != null && x.SearchText.Contains(search)));
         }
 
         query = string.Equals(request.SortDirection, "asc", StringComparison.OrdinalIgnoreCase)
@@ -127,15 +135,31 @@ public sealed class B2bCommerceService : IB2bCommerceService
             Name = dto.Name.Trim(),
             Slug = NormalizeSlug(dto.Slug, dto.Name),
             Brand = Trim(dto.Brand),
+            ProductType = Trim(dto.ProductType),
+            ManufacturerCode = Trim(dto.ManufacturerCode),
+            Barcode = Trim(dto.Barcode),
+            Unit = Trim(dto.Unit),
             CategoryPath = Trim(dto.CategoryPath),
+            ShortDescription = Trim(dto.ShortDescription),
             Description = dto.Description,
             PrimaryImageUrl = Trim(dto.PrimaryImageUrl),
+            BulletPointsJson = Trim(dto.BulletPointsJson),
+            AttributesJson = Trim(dto.AttributesJson),
+            MediaGalleryJson = Trim(dto.MediaGalleryJson),
+            DocumentsJson = Trim(dto.DocumentsJson),
+            MetaTitle = Trim(dto.MetaTitle),
+            MetaDescription = Trim(dto.MetaDescription),
+            SearchKeywords = Trim(dto.SearchKeywords),
+            MinOrderQuantity = dto.MinOrderQuantity,
+            PackageQuantity = dto.PackageQuantity,
+            SortOrder = dto.SortOrder,
             IsPublished = dto.IsPublished,
             DefaultStockId = dto.DefaultStockId,
             PublishedDate = dto.IsPublished ? now : null,
-            SearchText = BuildSearchText(sku, dto.Name, dto.Brand, dto.CategoryPath),
             CreatedDate = now
         };
+        entity.CompletenessScore = CalculateCatalogCompleteness(entity);
+        entity.SearchText = BuildSearchText(entity);
 
         await _catalogProducts.AddAsync(entity, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -166,16 +190,32 @@ public sealed class B2bCommerceService : IB2bCommerceService
         if (!string.IsNullOrWhiteSpace(dto.Name)) entity.Name = dto.Name.Trim();
         if (!string.IsNullOrWhiteSpace(dto.Slug)) entity.Slug = NormalizeSlug(dto.Slug, entity.Name);
         entity.Brand = dto.Brand ?? entity.Brand;
+        entity.ProductType = dto.ProductType ?? entity.ProductType;
+        entity.ManufacturerCode = dto.ManufacturerCode ?? entity.ManufacturerCode;
+        entity.Barcode = dto.Barcode ?? entity.Barcode;
+        entity.Unit = dto.Unit ?? entity.Unit;
         entity.CategoryPath = dto.CategoryPath ?? entity.CategoryPath;
+        entity.ShortDescription = dto.ShortDescription ?? entity.ShortDescription;
         entity.Description = dto.Description ?? entity.Description;
         entity.PrimaryImageUrl = dto.PrimaryImageUrl ?? entity.PrimaryImageUrl;
+        entity.BulletPointsJson = dto.BulletPointsJson ?? entity.BulletPointsJson;
+        entity.AttributesJson = dto.AttributesJson ?? entity.AttributesJson;
+        entity.MediaGalleryJson = dto.MediaGalleryJson ?? entity.MediaGalleryJson;
+        entity.DocumentsJson = dto.DocumentsJson ?? entity.DocumentsJson;
+        entity.MetaTitle = dto.MetaTitle ?? entity.MetaTitle;
+        entity.MetaDescription = dto.MetaDescription ?? entity.MetaDescription;
+        entity.SearchKeywords = dto.SearchKeywords ?? entity.SearchKeywords;
+        entity.MinOrderQuantity = dto.MinOrderQuantity ?? entity.MinOrderQuantity;
+        entity.PackageQuantity = dto.PackageQuantity ?? entity.PackageQuantity;
+        entity.SortOrder = dto.SortOrder ?? entity.SortOrder;
         entity.DefaultStockId = dto.DefaultStockId ?? entity.DefaultStockId;
         if (dto.IsPublished.HasValue && entity.IsPublished != dto.IsPublished.Value)
         {
             entity.IsPublished = dto.IsPublished.Value;
             entity.PublishedDate = dto.IsPublished.Value ? DateTimeProvider.Now : null;
         }
-        entity.SearchText = BuildSearchText(entity.Sku, entity.Name, entity.Brand, entity.CategoryPath);
+        entity.CompletenessScore = CalculateCatalogCompleteness(entity);
+        entity.SearchText = BuildSearchText(entity);
         entity.SetUpdatedInfo();
         _catalogProducts.Update(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -203,7 +243,11 @@ public sealed class B2bCommerceService : IB2bCommerceService
         variant.ErpStockId = dto.ErpStockId;
         variant.VariantSku = Normalize(dto.VariantSku);
         variant.VariantName = dto.VariantName.Trim();
+        variant.Barcode = Trim(dto.Barcode);
+        variant.Unit = Trim(dto.Unit);
         variant.AttributesJson = dto.AttributesJson;
+        variant.MediaGalleryJson = dto.MediaGalleryJson;
+        variant.SortOrder = dto.SortOrder;
         variant.IsActive = dto.IsActive;
         variant.SetUpdatedInfo();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -1052,9 +1096,25 @@ public sealed class B2bCommerceService : IB2bCommerceService
         Name = entity.Name,
         Slug = entity.Slug,
         Brand = entity.Brand,
+        ProductType = entity.ProductType,
+        ManufacturerCode = entity.ManufacturerCode,
+        Barcode = entity.Barcode,
+        Unit = entity.Unit,
         CategoryPath = entity.CategoryPath,
+        ShortDescription = entity.ShortDescription,
         Description = entity.Description,
         PrimaryImageUrl = entity.PrimaryImageUrl,
+        BulletPointsJson = entity.BulletPointsJson,
+        AttributesJson = entity.AttributesJson,
+        MediaGalleryJson = entity.MediaGalleryJson,
+        DocumentsJson = entity.DocumentsJson,
+        MetaTitle = entity.MetaTitle,
+        MetaDescription = entity.MetaDescription,
+        SearchKeywords = entity.SearchKeywords,
+        MinOrderQuantity = entity.MinOrderQuantity,
+        PackageQuantity = entity.PackageQuantity,
+        SortOrder = entity.SortOrder,
+        CompletenessScore = entity.CompletenessScore,
         IsPublished = entity.IsPublished,
         DefaultStockId = entity.DefaultStockId,
         PublishedDate = entity.PublishedDate,
@@ -1071,7 +1131,11 @@ public sealed class B2bCommerceService : IB2bCommerceService
         ErpStockId = entity.ErpStockId,
         VariantSku = entity.VariantSku,
         VariantName = entity.VariantName,
+        Barcode = entity.Barcode,
+        Unit = entity.Unit,
         AttributesJson = entity.AttributesJson,
+        MediaGalleryJson = entity.MediaGalleryJson,
+        SortOrder = entity.SortOrder,
         IsActive = entity.IsActive
     };
 
@@ -1393,5 +1457,35 @@ public sealed class B2bCommerceService : IB2bCommerceService
     private static bool IsMatched(string? status) => string.Equals(status, "Matched", StringComparison.OrdinalIgnoreCase);
     private static bool IsFinalPaymentStatus(string status) => status is B2bWorkflowStatuses.Completed or B2bWorkflowStatuses.Failed or B2bWorkflowStatuses.Cancelled;
     private static string NormalizeSlug(string? slug, string name) => (string.IsNullOrWhiteSpace(slug) ? name : slug).Trim().ToLowerInvariant().Replace(' ', '-');
-    private static string BuildSearchText(string sku, string name, string? brand, string? categoryPath) => string.Join(" ", new[] { sku, name, brand, categoryPath }.Where(x => !string.IsNullOrWhiteSpace(x)));
+    private static string BuildSearchText(CatalogProduct product) => string.Join(" ", new[]
+    {
+        product.Sku,
+        product.Name,
+        product.Brand,
+        product.ProductType,
+        product.ManufacturerCode,
+        product.Barcode,
+        product.Unit,
+        product.CategoryPath,
+        product.ShortDescription,
+        product.SearchKeywords
+    }.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+    private static int CalculateCatalogCompleteness(CatalogProduct product)
+    {
+        var score = 0;
+        if (!string.IsNullOrWhiteSpace(product.Sku)) score += 10;
+        if (!string.IsNullOrWhiteSpace(product.Name)) score += 10;
+        if (!string.IsNullOrWhiteSpace(product.Brand)) score += 8;
+        if (!string.IsNullOrWhiteSpace(product.ProductType)) score += 8;
+        if (!string.IsNullOrWhiteSpace(product.CategoryPath)) score += 10;
+        if (!string.IsNullOrWhiteSpace(product.ShortDescription)) score += 8;
+        if (!string.IsNullOrWhiteSpace(product.Description)) score += 10;
+        if (!string.IsNullOrWhiteSpace(product.PrimaryImageUrl)) score += 8;
+        if (!string.IsNullOrWhiteSpace(product.BulletPointsJson)) score += 8;
+        if (!string.IsNullOrWhiteSpace(product.AttributesJson)) score += 10;
+        if (!string.IsNullOrWhiteSpace(product.DocumentsJson)) score += 5;
+        if (product.DefaultStockId.HasValue) score += 5;
+        return Math.Min(100, score);
+    }
 }

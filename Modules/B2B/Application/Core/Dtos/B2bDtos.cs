@@ -9,9 +9,25 @@ public sealed class CatalogProductDto : BaseEntityDto
     public string Name { get; set; } = string.Empty;
     public string Slug { get; set; } = string.Empty;
     public string? Brand { get; set; }
+    public string? ProductType { get; set; }
+    public string? ManufacturerCode { get; set; }
+    public string? Barcode { get; set; }
+    public string? Unit { get; set; }
     public string? CategoryPath { get; set; }
+    public string? ShortDescription { get; set; }
     public string? Description { get; set; }
     public string? PrimaryImageUrl { get; set; }
+    public string? BulletPointsJson { get; set; }
+    public string? AttributesJson { get; set; }
+    public string? MediaGalleryJson { get; set; }
+    public string? DocumentsJson { get; set; }
+    public string? MetaTitle { get; set; }
+    public string? MetaDescription { get; set; }
+    public string? SearchKeywords { get; set; }
+    public decimal? MinOrderQuantity { get; set; }
+    public decimal? PackageQuantity { get; set; }
+    public int SortOrder { get; set; }
+    public int CompletenessScore { get; set; }
     public bool IsPublished { get; set; }
     public long? DefaultStockId { get; set; }
     public DateTime? PublishedDate { get; set; }
@@ -24,7 +40,11 @@ public sealed class CatalogVariantDto : BaseEntityDto
     public long? ErpStockId { get; set; }
     public string VariantSku { get; set; } = string.Empty;
     public string VariantName { get; set; } = string.Empty;
+    public string? Barcode { get; set; }
+    public string? Unit { get; set; }
     public string? AttributesJson { get; set; }
+    public string? MediaGalleryJson { get; set; }
+    public int SortOrder { get; set; }
     public bool IsActive { get; set; }
 }
 
@@ -34,9 +54,24 @@ public sealed class CreateCatalogProductDto
     [Required, StringLength(250)] public string Name { get; set; } = string.Empty;
     [StringLength(250)] public string? Slug { get; set; }
     [StringLength(120)] public string? Brand { get; set; }
+    [StringLength(120)] public string? ProductType { get; set; }
+    [StringLength(120)] public string? ManufacturerCode { get; set; }
+    [StringLength(80)] public string? Barcode { get; set; }
+    [StringLength(30)] public string? Unit { get; set; }
     [StringLength(500)] public string? CategoryPath { get; set; }
+    [StringLength(500)] public string? ShortDescription { get; set; }
     public string? Description { get; set; }
     [StringLength(500)] public string? PrimaryImageUrl { get; set; }
+    public string? BulletPointsJson { get; set; }
+    public string? AttributesJson { get; set; }
+    public string? MediaGalleryJson { get; set; }
+    public string? DocumentsJson { get; set; }
+    [StringLength(250)] public string? MetaTitle { get; set; }
+    [StringLength(500)] public string? MetaDescription { get; set; }
+    [StringLength(1000)] public string? SearchKeywords { get; set; }
+    public decimal? MinOrderQuantity { get; set; }
+    public decimal? PackageQuantity { get; set; }
+    public int SortOrder { get; set; }
     public bool IsPublished { get; set; }
     public long? DefaultStockId { get; set; }
 }
@@ -47,9 +82,24 @@ public sealed class UpdateCatalogProductDto
     [StringLength(250)] public string? Name { get; set; }
     [StringLength(250)] public string? Slug { get; set; }
     [StringLength(120)] public string? Brand { get; set; }
+    [StringLength(120)] public string? ProductType { get; set; }
+    [StringLength(120)] public string? ManufacturerCode { get; set; }
+    [StringLength(80)] public string? Barcode { get; set; }
+    [StringLength(30)] public string? Unit { get; set; }
     [StringLength(500)] public string? CategoryPath { get; set; }
+    [StringLength(500)] public string? ShortDescription { get; set; }
     public string? Description { get; set; }
     [StringLength(500)] public string? PrimaryImageUrl { get; set; }
+    public string? BulletPointsJson { get; set; }
+    public string? AttributesJson { get; set; }
+    public string? MediaGalleryJson { get; set; }
+    public string? DocumentsJson { get; set; }
+    [StringLength(250)] public string? MetaTitle { get; set; }
+    [StringLength(500)] public string? MetaDescription { get; set; }
+    [StringLength(1000)] public string? SearchKeywords { get; set; }
+    public decimal? MinOrderQuantity { get; set; }
+    public decimal? PackageQuantity { get; set; }
+    public int? SortOrder { get; set; }
     public bool? IsPublished { get; set; }
     public long? DefaultStockId { get; set; }
 }
@@ -60,7 +110,11 @@ public sealed class UpsertCatalogVariantDto
     public long? ErpStockId { get; set; }
     [Required, StringLength(80)] public string VariantSku { get; set; } = string.Empty;
     [Required, StringLength(250)] public string VariantName { get; set; } = string.Empty;
+    [StringLength(80)] public string? Barcode { get; set; }
+    [StringLength(30)] public string? Unit { get; set; }
     public string? AttributesJson { get; set; }
+    public string? MediaGalleryJson { get; set; }
+    public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
 }
 
