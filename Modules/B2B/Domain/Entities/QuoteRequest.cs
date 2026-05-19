@@ -6,6 +6,7 @@ public sealed class QuoteRequest : BaseEntity
 {
     public string QuoteNumber { get; set; } = string.Empty;
     public long CustomerId { get; set; }
+    public long? BuyerId { get; set; }
     public long? UserId { get; set; }
     public string Status { get; set; } = "Draft";
     public string CurrencyCode { get; set; } = "TRY";

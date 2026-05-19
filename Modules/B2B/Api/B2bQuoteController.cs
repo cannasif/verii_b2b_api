@@ -38,10 +38,17 @@ public sealed class B2bQuoteController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<QuoteRequestDto>>> Create([FromBody] CreateQuoteRequestDto dto, CancellationToken cancellationToken = default)
     {
-        var validation = await _portalAccess.ValidateCustomerAccessAsync(Request, dto.CustomerId, cancellationToken);
+        var validation = await _portalAccess.ValidateCustomerContextAsync(Request, dto.CustomerId, cancellationToken);
         if (!validation.Success)
         {
             return StatusCode(validation.StatusCode, ApiResponse<QuoteRequestDto>.ErrorResult(validation.Message, validation.ExceptionMessage, validation.StatusCode));
+        }
+
+        var context = validation.Data!;
+        if (!context.IsBackoffice && !context.CanViewCompanyHistory)
+        {
+            dto.BuyerId = context.BuyerId;
+            dto.UserId = context.UserId;
         }
 
         var result = await _service.CreateQuoteAsync(dto, cancellationToken);

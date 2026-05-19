@@ -255,9 +255,9 @@ public sealed class B2bCommerceService : IB2bCommerceService
         return ApiResponse<CustomerProductAliasDto>.SuccessResult(MapAlias(alias), "Product alias updated successfully");
     }
 
-    public async Task<ApiResponse<CartDto>> GetDraftCartAsync(long customerId, long? userId = null, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<CartDto>> GetDraftCartAsync(long customerId, long? userId = null, long? buyerId = null, CancellationToken cancellationToken = default)
     {
-        var cart = await GetOrCreateDraftCart(customerId, userId, "TRY", cancellationToken);
+        var cart = await GetOrCreateDraftCart(customerId, userId, buyerId, "TRY", cancellationToken);
         return ApiResponse<CartDto>.SuccessResult(MapCart(cart), "Draft cart retrieved successfully");
     }
 
@@ -297,7 +297,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
                 return ApiResponse<CartDto>.ErrorResult("Cart line cannot be added because requested quantity is not available", statusCode: 409);
             }
 
-            var cart = await GetOrCreateDraftCart(dto.CustomerId, dto.UserId, dto.CurrencyCode, cancellationToken);
+            var cart = await GetOrCreateDraftCart(dto.CustomerId, dto.UserId, dto.BuyerId, dto.CurrencyCode, cancellationToken);
             var warehouseCode = resolved.Data.PreferredWarehouseCode ?? dto.WarehouseCode;
             var line = new B2bCartLine
             {
@@ -327,7 +327,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
 
             await _unitOfWork.SaveChangesAsync(cancellationToken);
             await _unitOfWork.CommitTransactionAsync(cancellationToken);
-            return await GetDraftCartAsync(dto.CustomerId, dto.UserId, cancellationToken);
+            return await GetDraftCartAsync(dto.CustomerId, dto.UserId, dto.BuyerId, cancellationToken);
         }
         catch
         {
@@ -365,6 +365,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
             var addResult = await AddCartLineAsync(new AddCartLineDto
             {
                 CustomerId = dto.CustomerId,
+                BuyerId = dto.BuyerId,
                 UserId = dto.UserId,
                 CustomerGroupCode = dto.CustomerGroupCode,
                 CustomerSku = input.CustomerSku,
@@ -388,7 +389,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
             result.Lines.Add(lineResult);
         }
 
-        result.Cart ??= (await GetDraftCartAsync(dto.CustomerId, dto.UserId, cancellationToken)).Data;
+        result.Cart ??= (await GetDraftCartAsync(dto.CustomerId, dto.UserId, dto.BuyerId, cancellationToken)).Data;
         var statusCode = result.AddedLineCount == result.RequestedLineCount ? 200 : result.AddedLineCount == 0 ? 400 : 207;
         var response = result.AddedLineCount == 0
             ? ApiResponse<QuickOrderResultDto>.ErrorResult("No quick order lines could be added", statusCode: statusCode)
@@ -565,6 +566,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
             {
                 OrderNumber = string.IsNullOrWhiteSpace(dto.OfferNo) ? $"B2B-{DateTimeProvider.Now:yyyyMMddHHmmssfff}" : dto.OfferNo.Trim(),
                 CustomerId = cart.CustomerId,
+                BuyerId = cart.BuyerId,
                 UserId = cart.UserId,
                 Status = B2bWorkflowStatuses.WaitingPayment,
                 CurrencyCode = cart.CurrencyCode,
@@ -640,6 +642,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
         var quickOrder = new QuickOrderDto
         {
             CustomerId = order.CustomerId,
+            BuyerId = order.BuyerId,
             UserId = dto.UserId ?? order.UserId,
             CurrencyCode = order.CurrencyCode,
             AllowBackorder = dto.AllowBackorder,
@@ -658,47 +661,64 @@ public sealed class B2bCommerceService : IB2bCommerceService
         return await AddQuickOrderLinesAsync(quickOrder, cancellationToken);
     }
 
-    public async Task<ApiResponse<CustomerPortalSummaryDto>> GetCustomerPortalSummaryAsync(long customerId, long? userId = null, CancellationToken cancellationToken = default)
+    public async Task<ApiResponse<CustomerPortalSummaryDto>> GetCustomerPortalSummaryAsync(long customerId, long? userId = null, long? buyerId = null, bool includeCompanyHistory = true, CancellationToken cancellationToken = default)
     {
         if (customerId <= 0)
         {
             return ApiResponse<CustomerPortalSummaryDto>.ErrorResult("Customer is required", statusCode: 400);
         }
 
-        var draftCart = await _carts.Query()
+        var draftCartQuery = ApplyPortalScope(
+            _carts.Query().Where(x => !x.IsDeleted && x.CustomerId == customerId && x.Status == B2bWorkflowStatuses.Draft),
+            includeCompanyHistory,
+            userId,
+            buyerId);
+
+        var orderQuery = ApplyPortalScope(
+            _orders.Query().Where(x => !x.IsDeleted && x.CustomerId == customerId),
+            includeCompanyHistory,
+            userId,
+            buyerId);
+
+        var quoteQuery = ApplyPortalScope(
+            _quotes.Query().Where(x => !x.IsDeleted && x.CustomerId == customerId),
+            includeCompanyHistory,
+            userId,
+            buyerId);
+
+        var draftCart = await draftCartQuery
             .Include(x => x.Lines.Where(l => !l.IsDeleted))
-            .Where(x => !x.IsDeleted && x.CustomerId == customerId && x.Status == B2bWorkflowStatuses.Draft && (!userId.HasValue || x.UserId == userId.Value))
             .OrderByDescending(x => x.Id)
             .FirstOrDefaultAsync(cancellationToken);
 
-        var orders = await _orders.Query()
+        var orders = await orderQuery
             .Include(x => x.Lines.Where(l => !l.IsDeleted))
-            .Where(x => !x.IsDeleted && x.CustomerId == customerId)
             .OrderByDescending(x => x.Id)
             .Take(10)
             .ToListAsync(cancellationToken);
 
+        var scopedOrderIds = orderQuery.Select(x => x.Id);
         var pendingPayments = await _payments.Query()
             .Include(x => x.Order)
-            .Where(x => !x.IsDeleted && x.Order != null && x.Order.CustomerId == customerId && x.Status == B2bWorkflowStatuses.Pending)
+            .Where(x => !x.IsDeleted && x.Order != null && scopedOrderIds.Contains(x.Order.Id) && x.Status == B2bWorkflowStatuses.Pending)
             .OrderByDescending(x => x.Id)
             .Take(10)
             .ToListAsync(cancellationToken);
 
         var openOrderStatuses = new[] { B2bWorkflowStatuses.WaitingPayment, "PendingApproval", B2bWorkflowStatuses.Submitted, B2bWorkflowStatuses.Processing };
-        var openOrderTotal = await _orders.Query()
-            .Where(x => !x.IsDeleted && x.CustomerId == customerId && openOrderStatuses.Contains(x.Status))
+        var openOrderTotal = await orderQuery
+            .Where(x => openOrderStatuses.Contains(x.Status))
             .SumAsync(x => x.GrandTotal, cancellationToken);
 
         var summary = new CustomerPortalSummaryDto
         {
             CustomerId = customerId,
             CurrencyCode = draftCart?.CurrencyCode ?? orders.FirstOrDefault()?.CurrencyCode ?? "TRY",
-            DraftCartCount = await _carts.Query().CountAsync(x => !x.IsDeleted && x.CustomerId == customerId && x.Status == B2bWorkflowStatuses.Draft, cancellationToken),
-            OrderCount = await _orders.Query().CountAsync(x => !x.IsDeleted && x.CustomerId == customerId, cancellationToken),
-            OpenOrderCount = await _orders.Query().CountAsync(x => !x.IsDeleted && x.CustomerId == customerId && openOrderStatuses.Contains(x.Status), cancellationToken),
-            QuoteCount = await _quotes.Query().CountAsync(x => !x.IsDeleted && x.CustomerId == customerId, cancellationToken),
-            PendingQuoteCount = await _quotes.Query().CountAsync(x => !x.IsDeleted && x.CustomerId == customerId && x.Status != B2bWorkflowStatuses.Approved && x.Status != B2bWorkflowStatuses.Rejected && x.Status != B2bWorkflowStatuses.Cancelled, cancellationToken),
+            DraftCartCount = await draftCartQuery.CountAsync(cancellationToken),
+            OrderCount = await orderQuery.CountAsync(cancellationToken),
+            OpenOrderCount = await orderQuery.CountAsync(x => openOrderStatuses.Contains(x.Status), cancellationToken),
+            QuoteCount = await quoteQuery.CountAsync(cancellationToken),
+            PendingQuoteCount = await quoteQuery.CountAsync(x => x.Status != B2bWorkflowStatuses.Approved && x.Status != B2bWorkflowStatuses.Rejected && x.Status != B2bWorkflowStatuses.Cancelled, cancellationToken),
             PendingPaymentCount = pendingPayments.Count,
             OpenOrderTotal = openOrderTotal,
             PendingPaymentTotal = pendingPayments.Sum(x => x.Amount),
@@ -760,16 +780,17 @@ public sealed class B2bCommerceService : IB2bCommerceService
         return ApiResponse<PaymentTransactionDto>.SuccessResult(MapPayment(payment), "Payment status updated successfully");
     }
 
-    private async Task<B2bCart> GetOrCreateDraftCart(long customerId, long? userId, string currencyCode, CancellationToken cancellationToken)
+    private async Task<B2bCart> GetOrCreateDraftCart(long customerId, long? userId, long? buyerId, string currencyCode, CancellationToken cancellationToken)
     {
         var cart = await _carts.Query(tracking: true)
             .Include(x => x.Lines.Where(l => !l.IsDeleted))
-            .FirstOrDefaultAsync(x => x.CustomerId == customerId && x.UserId == userId && x.Status == B2bWorkflowStatuses.Draft && !x.IsDeleted, cancellationToken);
+            .FirstOrDefaultAsync(x => x.CustomerId == customerId && x.UserId == userId && x.BuyerId == buyerId && x.Status == B2bWorkflowStatuses.Draft && !x.IsDeleted, cancellationToken);
         if (cart != null) return cart;
 
         cart = new B2bCart
         {
             CustomerId = customerId,
+            BuyerId = buyerId,
             UserId = userId,
             CurrencyCode = NormalizeCurrency(currencyCode),
             Status = B2bWorkflowStatuses.Draft
@@ -777,6 +798,19 @@ public sealed class B2bCommerceService : IB2bCommerceService
         await _carts.AddAsync(cart, cancellationToken);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return cart;
+    }
+
+    private static IQueryable<T> ApplyPortalScope<T>(IQueryable<T> query, bool includeCompanyHistory, long? userId, long? buyerId)
+        where T : class
+    {
+        if (includeCompanyHistory)
+        {
+            return query;
+        }
+
+        return query.Where(x =>
+            (buyerId.HasValue && EF.Property<long?>(x, nameof(B2bCart.BuyerId)) == buyerId.Value) ||
+            (userId.HasValue && EF.Property<long?>(x, nameof(B2bCart.UserId)) == userId.Value));
     }
 
     private async Task<ApiResponse<B2bPriceAvailabilityDto>> ResolveCartLineAsync(B2bCart cart, B2bCartLine line, decimal quantity, CancellationToken cancellationToken)
@@ -921,6 +955,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
         CreatedDate = entity.CreatedDate,
         UpdatedDate = entity.UpdatedDate,
         CustomerId = entity.CustomerId,
+        BuyerId = entity.BuyerId,
         UserId = entity.UserId,
         Status = entity.Status,
         CurrencyCode = entity.CurrencyCode,
@@ -958,6 +993,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
         UpdatedDate = entity.UpdatedDate,
         OrderNumber = entity.OrderNumber,
         CustomerId = entity.CustomerId,
+        BuyerId = entity.BuyerId,
         UserId = entity.UserId,
         Status = entity.Status,
         CurrencyCode = entity.CurrencyCode,

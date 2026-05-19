@@ -24,13 +24,16 @@ public sealed class B2bCartController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<CartDto>>> GetDraft(long customerId, [FromQuery] long? userId = null, CancellationToken cancellationToken = default)
     {
-        var validation = await _portalAccess.ValidateCustomerAccessAsync(Request, customerId, cancellationToken);
+        var validation = await _portalAccess.ValidateCustomerContextAsync(Request, customerId, cancellationToken);
         if (!validation.Success)
         {
             return StatusCode(validation.StatusCode, ApiResponse<CartDto>.ErrorResult(validation.Message, validation.ExceptionMessage, validation.StatusCode));
         }
 
-        var result = await _service.GetDraftCartAsync(customerId, userId, cancellationToken);
+        var context = validation.Data!;
+        var scopedUserId = context.IsBackoffice || context.CanViewCompanyHistory ? userId : context.UserId;
+        var scopedBuyerId = context.IsBackoffice || context.CanViewCompanyHistory ? null : context.BuyerId;
+        var result = await _service.GetDraftCartAsync(customerId, scopedUserId, scopedBuyerId, cancellationToken);
         return StatusCode(result.StatusCode, result);
     }
 
@@ -38,12 +41,13 @@ public sealed class B2bCartController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<CartDto>>> AddLine([FromBody] AddCartLineDto dto, CancellationToken cancellationToken = default)
     {
-        var validation = await _portalAccess.ValidateCustomerAccessAsync(Request, dto.CustomerId, cancellationToken);
+        var validation = await _portalAccess.ValidateCustomerContextAsync(Request, dto.CustomerId, cancellationToken);
         if (!validation.Success)
         {
             return StatusCode(validation.StatusCode, ApiResponse<CartDto>.ErrorResult(validation.Message, validation.ExceptionMessage, validation.StatusCode));
         }
 
+        ApplyPortalScope(dto, validation.Data!);
         var result = await _service.AddCartLineAsync(dto, cancellationToken);
         return StatusCode(result.StatusCode, result);
     }
@@ -52,12 +56,13 @@ public sealed class B2bCartController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<QuickOrderResultDto>>> QuickOrder([FromBody] QuickOrderDto dto, CancellationToken cancellationToken = default)
     {
-        var validation = await _portalAccess.ValidateCustomerAccessAsync(Request, dto.CustomerId, cancellationToken);
+        var validation = await _portalAccess.ValidateCustomerContextAsync(Request, dto.CustomerId, cancellationToken);
         if (!validation.Success)
         {
             return StatusCode(validation.StatusCode, ApiResponse<QuickOrderResultDto>.ErrorResult(validation.Message, validation.ExceptionMessage, validation.StatusCode));
         }
 
+        ApplyPortalScope(dto, validation.Data!);
         var result = await _service.AddQuickOrderLinesAsync(dto, cancellationToken);
         return StatusCode(result.StatusCode, result);
     }
@@ -74,5 +79,29 @@ public sealed class B2bCartController : ControllerBase
     {
         var result = await _service.RemoveCartLineAsync(lineId, cancellationToken);
         return StatusCode(result.StatusCode, result);
+    }
+
+    private static void ApplyPortalScope(AddCartLineDto dto, B2bPortalContextDto context)
+    {
+        if (context.IsBackoffice || context.CanViewCompanyHistory)
+        {
+            return;
+        }
+
+        dto.BuyerId = context.BuyerId;
+        dto.UserId = context.UserId;
+        dto.CustomerGroupCode ??= context.CustomerGroupCode;
+    }
+
+    private static void ApplyPortalScope(QuickOrderDto dto, B2bPortalContextDto context)
+    {
+        if (context.IsBackoffice || context.CanViewCompanyHistory)
+        {
+            return;
+        }
+
+        dto.BuyerId = context.BuyerId;
+        dto.UserId = context.UserId;
+        dto.CustomerGroupCode ??= context.CustomerGroupCode;
     }
 }

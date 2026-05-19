@@ -29,6 +29,7 @@ public sealed class CreateB2bCompanyDto
 public sealed class CreateB2bPortalSessionDto
 {
     [Required, StringLength(80)] public string CompanyCode { get; set; } = string.Empty;
+    [StringLength(180)] public string? BuyerEmail { get; set; }
 }
 
 public sealed class B2bPortalSessionDto
@@ -36,6 +37,24 @@ public sealed class B2bPortalSessionDto
     public string Token { get; set; } = string.Empty;
     public DateTime ExpiresAt { get; set; }
     public B2bCompanyDto Company { get; set; } = new();
+    public B2bBuyerDto? Buyer { get; set; }
+    public string Scope { get; set; } = "Buyer";
+    public bool CanViewCompanyHistory { get; set; }
+}
+
+public sealed class B2bPortalContextDto
+{
+    public bool IsBackoffice { get; set; }
+    public long CompanyId { get; set; }
+    public long CustomerId { get; set; }
+    public string CompanyCode { get; set; } = string.Empty;
+    public string? CustomerGroupCode { get; set; }
+    public long? BuyerId { get; set; }
+    public long? UserId { get; set; }
+    public string? BuyerEmail { get; set; }
+    public string? BuyerName { get; set; }
+    public string RoleCode { get; set; } = "Buyer";
+    public bool CanViewCompanyHistory { get; set; }
 }
 
 public sealed class B2bBuyerDto : BaseEntityDto

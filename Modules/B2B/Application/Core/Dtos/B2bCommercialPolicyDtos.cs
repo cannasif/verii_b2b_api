@@ -92,6 +92,7 @@ public sealed class QuoteRequestDto : BaseEntityDto
 {
     public string QuoteNumber { get; set; } = string.Empty;
     public long CustomerId { get; set; }
+    public long? BuyerId { get; set; }
     public long? UserId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string CurrencyCode { get; set; } = "TRY";
@@ -154,6 +155,7 @@ public sealed class QuoteRequestLineDto : BaseEntityDto
 public sealed class CreateQuoteRequestDto
 {
     public long CustomerId { get; set; }
+    public long? BuyerId { get; set; }
     public long? UserId { get; set; }
     [StringLength(3)] public string CurrencyCode { get; set; } = "TRY";
     [StringLength(40)] public string? OfferType { get; set; }
@@ -211,6 +213,7 @@ public sealed class UpdateQuoteStatusDto
 public sealed class ConvertQuoteToCartDto
 {
     public long QuoteId { get; set; }
+    public long? BuyerId { get; set; }
     public long? UserId { get; set; }
     public bool AllowBackorder { get; set; }
 }

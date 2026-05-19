@@ -59,13 +59,16 @@ public sealed class B2bOrderController : ControllerBase
     [AllowAnonymous]
     public async Task<ActionResult<ApiResponse<CustomerPortalSummaryDto>>> GetPortalSummary(long customerId, [FromQuery] long? userId = null, CancellationToken cancellationToken = default)
     {
-        var validation = await _portalAccess.ValidateCustomerAccessAsync(Request, customerId, cancellationToken);
+        var validation = await _portalAccess.ValidateCustomerContextAsync(Request, customerId, cancellationToken);
         if (!validation.Success)
         {
             return StatusCode(validation.StatusCode, ApiResponse<CustomerPortalSummaryDto>.ErrorResult(validation.Message, validation.ExceptionMessage, validation.StatusCode));
         }
 
-        var result = await _service.GetCustomerPortalSummaryAsync(customerId, userId, cancellationToken);
+        var context = validation.Data!;
+        var scopedUserId = context.IsBackoffice || context.CanViewCompanyHistory ? userId : context.UserId;
+        var scopedBuyerId = context.IsBackoffice || context.CanViewCompanyHistory ? null : context.BuyerId;
+        var result = await _service.GetCustomerPortalSummaryAsync(customerId, scopedUserId, scopedBuyerId, context.IsBackoffice || context.CanViewCompanyHistory, cancellationToken);
         return StatusCode(result.StatusCode, result);
     }
 }

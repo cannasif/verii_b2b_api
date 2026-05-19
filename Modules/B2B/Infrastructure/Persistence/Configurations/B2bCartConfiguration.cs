@@ -19,5 +19,6 @@ public sealed class B2bCartConfiguration : BaseEntityConfiguration<B2bCart>
             .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(x => new { x.CustomerId, x.Status }).HasDatabaseName("IX_B2B_Cart_CustomerStatus");
+        builder.HasIndex(x => new { x.CustomerId, x.BuyerId, x.Status }).HasDatabaseName("IX_B2B_Cart_CustomerBuyerStatus");
     }
 }

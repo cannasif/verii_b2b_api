@@ -102,6 +102,7 @@ public sealed class UpdateCustomerProductAliasDto
 public sealed class CartDto : BaseEntityDto
 {
     public long CustomerId { get; set; }
+    public long? BuyerId { get; set; }
     public long? UserId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string CurrencyCode { get; set; } = "TRY";
@@ -130,6 +131,7 @@ public sealed class CartLineDto : BaseEntityDto
 public sealed class AddCartLineDto
 {
     public long CustomerId { get; set; }
+    public long? BuyerId { get; set; }
     public long? UserId { get; set; }
     [StringLength(80)] public string? CustomerGroupCode { get; set; }
     [StringLength(120)] public string? CustomerSku { get; set; }
@@ -156,6 +158,7 @@ public sealed class QuickOrderLineDto
 public sealed class QuickOrderDto
 {
     public long CustomerId { get; set; }
+    public long? BuyerId { get; set; }
     public long? UserId { get; set; }
     [StringLength(80)] public string? CustomerGroupCode { get; set; }
     [StringLength(3)] public string CurrencyCode { get; set; } = "TRY";
@@ -193,6 +196,7 @@ public sealed class OrderDto : BaseEntityDto
 {
     public string OrderNumber { get; set; } = string.Empty;
     public long CustomerId { get; set; }
+    public long? BuyerId { get; set; }
     public long? UserId { get; set; }
     public string Status { get; set; } = string.Empty;
     public string CurrencyCode { get; set; } = "TRY";

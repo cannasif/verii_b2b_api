@@ -230,6 +230,7 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
         {
             QuoteNumber = string.IsNullOrWhiteSpace(dto.OfferNo) ? $"Q-{DateTimeProvider.Now:yyyyMMddHHmmssfff}" : dto.OfferNo.Trim(),
             CustomerId = dto.CustomerId,
+            BuyerId = dto.BuyerId,
             UserId = dto.UserId,
             Status = B2bWorkflowStatuses.Submitted,
             CurrencyCode = NormalizeCurrency(dto.CurrencyCode),
@@ -396,7 +397,7 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
                 return ApiResponse<CartDto>.ErrorResult("Quote has no lines", statusCode: 400);
             }
 
-            var cart = await GetOrCreateDraftCartAsync(quote.CustomerId, dto.UserId ?? quote.UserId, quote.CurrencyCode, cancellationToken);
+            var cart = await GetOrCreateDraftCartAsync(quote.CustomerId, dto.UserId ?? quote.UserId, dto.BuyerId ?? quote.BuyerId, quote.CurrencyCode, cancellationToken);
             foreach (var quoteLine in quote.Lines.Where(x => !x.IsDeleted))
             {
                 var resolved = await _pricingAvailabilityResolver.ResolveAsync(new ResolveB2bPriceAvailabilityDto
@@ -503,11 +504,11 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
         return new PagedResponse<TDto>(items.Select(map).ToList(), total, pageNumber, pageSize);
     }
 
-    private async Task<B2bCart> GetOrCreateDraftCartAsync(long customerId, long? userId, string currencyCode, CancellationToken cancellationToken)
+    private async Task<B2bCart> GetOrCreateDraftCartAsync(long customerId, long? userId, long? buyerId, string currencyCode, CancellationToken cancellationToken)
     {
         var cart = await _carts.Query(tracking: true)
             .Include(x => x.Lines.Where(l => !l.IsDeleted))
-            .FirstOrDefaultAsync(x => !x.IsDeleted && x.CustomerId == customerId && x.UserId == userId && x.Status == B2bWorkflowStatuses.Draft, cancellationToken);
+            .FirstOrDefaultAsync(x => !x.IsDeleted && x.CustomerId == customerId && x.UserId == userId && x.BuyerId == buyerId && x.Status == B2bWorkflowStatuses.Draft, cancellationToken);
         if (cart != null)
         {
             return cart;
@@ -516,6 +517,7 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
         cart = new B2bCart
         {
             CustomerId = customerId,
+            BuyerId = buyerId,
             UserId = userId,
             Status = B2bWorkflowStatuses.Draft,
             CurrencyCode = NormalizeCurrency(currencyCode),
@@ -565,6 +567,7 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
         CreatedDate = entity.CreatedDate,
         UpdatedDate = entity.UpdatedDate,
         CustomerId = entity.CustomerId,
+        BuyerId = entity.BuyerId,
         UserId = entity.UserId,
         Status = entity.Status,
         CurrencyCode = entity.CurrencyCode,
@@ -657,6 +660,7 @@ public sealed class B2bCommercialPolicyService : IB2bCommercialPolicyService
         UpdatedDate = entity.UpdatedDate,
         QuoteNumber = entity.QuoteNumber,
         CustomerId = entity.CustomerId,
+        BuyerId = entity.BuyerId,
         UserId = entity.UserId,
         Status = entity.Status,
         CurrencyCode = entity.CurrencyCode,

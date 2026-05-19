@@ -37,5 +37,6 @@ public sealed class B2bOrderConfiguration : BaseEntityConfiguration<B2bOrder>
         builder.HasIndex(x => x.OfferDate).HasDatabaseName("IX_B2B_Order_OfferDate");
         builder.HasIndex(x => x.QuoteRequestId).HasDatabaseName("IX_B2B_Order_QuotationId");
         builder.HasIndex(x => new { x.CustomerId, x.Status }).HasDatabaseName("IX_B2B_Order_CustomerStatus");
+        builder.HasIndex(x => new { x.CustomerId, x.BuyerId, x.Status }).HasDatabaseName("IX_B2B_Order_CustomerBuyerStatus");
     }
 }

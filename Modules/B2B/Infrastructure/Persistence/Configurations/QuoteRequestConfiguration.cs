@@ -34,5 +34,6 @@ public sealed class QuoteRequestConfiguration : BaseEntityConfiguration<QuoteReq
         builder.HasIndex(x => x.OfferNo).HasDatabaseName("IX_B2B_Quotation_OfferNo");
         builder.HasIndex(x => x.OfferDate).HasDatabaseName("IX_B2B_Quotation_OfferDate");
         builder.HasIndex(x => new { x.CustomerId, x.Status }).HasDatabaseName("IX_B2B_Quotation_CustomerStatus");
+        builder.HasIndex(x => new { x.CustomerId, x.BuyerId, x.Status }).HasDatabaseName("IX_B2B_Quotation_CustomerBuyerStatus");
     }
 }
