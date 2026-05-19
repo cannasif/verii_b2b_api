@@ -1,0 +1,263 @@
+using System.Globalization;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Wms.Application.B2B.Dtos;
+using Wms.Application.Common;
+using Wms.Domain.Common;
+using Wms.Domain.Entities.B2B;
+
+namespace Wms.Application.B2B.Services;
+
+public sealed class PaytrPaymentService : IPaytrPaymentService
+{
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private readonly HttpClient _httpClient;
+    private readonly PaytrOptions _options;
+    private readonly IRepository<B2bOrder> _orders;
+    private readonly IRepository<PaymentTransaction> _payments;
+    private readonly IUnitOfWork _unitOfWork;
+
+    public PaytrPaymentService(
+        HttpClient httpClient,
+        IOptions<PaytrOptions> options,
+        IRepository<B2bOrder> orders,
+        IRepository<PaymentTransaction> payments,
+        IUnitOfWork unitOfWork)
+    {
+        _httpClient = httpClient;
+        _options = options.Value;
+        _orders = orders;
+        _payments = payments;
+        _unitOfWork = unitOfWork;
+    }
+
+    public async Task<ApiResponse<PaytrIframeTokenDto>> CreateIframeTokenAsync(CreatePaytrIframeTokenDto dto, string requestIp, CancellationToken cancellationToken = default)
+    {
+        if (!HasCredentials())
+        {
+            return ApiResponse<PaytrIframeTokenDto>.ErrorResult("PayTR ayarları eksik. MerchantId, MerchantKey ve MerchantSalt tanımlanmalı.", statusCode: 400);
+        }
+
+        var order = await _orders.Query()
+            .Include(x => x.Lines.Where(l => !l.IsDeleted))
+            .FirstOrDefaultAsync(x => !x.IsDeleted && x.Id == dto.OrderId, cancellationToken);
+        if (order is null)
+        {
+            return ApiResponse<PaytrIframeTokenDto>.ErrorResult("Sipariş bulunamadı.", statusCode: 404);
+        }
+
+        if (order.GrandTotal <= 0)
+        {
+            return ApiResponse<PaytrIframeTokenDto>.ErrorResult("Ödeme alınacak sipariş tutarı geçersiz.", statusCode: 400);
+        }
+
+        var merchantOid = CreateMerchantOid(order.Id);
+        var amountInKurus = ToMinorUnit(order.GrandTotal);
+        var currency = ToPaytrCurrency(order.CurrencyCode);
+        var userIp = Trim(dto.UserIp) ?? requestIp;
+        var userBasket = CreateBasket(order);
+        var okUrl = Trim(dto.OkUrl) ?? _options.OkUrl;
+        var failUrl = Trim(dto.FailUrl) ?? _options.FailUrl;
+        if (string.IsNullOrWhiteSpace(okUrl) || string.IsNullOrWhiteSpace(failUrl))
+        {
+            return ApiResponse<PaytrIframeTokenDto>.ErrorResult("PayTR dönüş URL ayarları eksik.", statusCode: 400);
+        }
+
+        var token = CreateRequestToken(userIp, merchantOid, dto.Email, amountInKurus, userBasket, currency);
+        var form = new Dictionary<string, string>
+        {
+            ["merchant_id"] = _options.MerchantId,
+            ["user_ip"] = userIp,
+            ["merchant_oid"] = merchantOid,
+            ["email"] = dto.Email.Trim(),
+            ["payment_amount"] = amountInKurus,
+            ["paytr_token"] = token,
+            ["user_basket"] = userBasket,
+            ["debug_on"] = _options.DebugOn ? "1" : "0",
+            ["no_installment"] = _options.NoInstallment ? "1" : "0",
+            ["max_installment"] = _options.MaxInstallment.ToString(CultureInfo.InvariantCulture),
+            ["user_name"] = dto.UserName.Trim(),
+            ["user_address"] = dto.UserAddress.Trim(),
+            ["user_phone"] = dto.UserPhone.Trim(),
+            ["merchant_ok_url"] = okUrl,
+            ["merchant_fail_url"] = failUrl,
+            ["timeout_limit"] = _options.TimeoutLimit.ToString(CultureInfo.InvariantCulture),
+            ["currency"] = currency,
+            ["test_mode"] = _options.TestMode ? "1" : "0",
+            ["lang"] = string.IsNullOrWhiteSpace(_options.Lang) ? "tr" : _options.Lang.Trim()
+        };
+        if (_options.IframeV2) form["iframe_v2"] = "1";
+        if (_options.IframeV2Dark) form["iframe_v2_dark"] = "1";
+
+        using var response = await _httpClient.PostAsync(_options.TokenUrl, new FormUrlEncodedContent(form), cancellationToken);
+        var responseBody = await response.Content.ReadAsStringAsync(cancellationToken);
+        if (!response.IsSuccessStatusCode)
+        {
+            return ApiResponse<PaytrIframeTokenDto>.ErrorResult("PayTR token isteği başarısız.", responseBody, (int)response.StatusCode);
+        }
+
+        using var json = JsonDocument.Parse(responseBody);
+        var root = json.RootElement;
+        var status = root.TryGetProperty("status", out var statusElement) ? statusElement.GetString() : null;
+        if (!string.Equals(status, "success", StringComparison.OrdinalIgnoreCase))
+        {
+            var reason = root.TryGetProperty("reason", out var reasonElement) ? reasonElement.GetString() : responseBody;
+            return ApiResponse<PaytrIframeTokenDto>.ErrorResult("PayTR token üretilemedi.", reason, statusCode: 400);
+        }
+
+        var iframeToken = root.GetProperty("token").GetString() ?? string.Empty;
+        var payment = new PaymentTransaction
+        {
+            OrderId = order.Id,
+            ProviderKey = "PAYTR",
+            ExternalTransactionId = merchantOid,
+            Status = B2bWorkflowStatuses.Pending,
+            Amount = order.GrandTotal,
+            CurrencyCode = order.CurrencyCode,
+            PaymentMethod = "PayTR iFrame",
+            RequestedDate = DateTimeProvider.Now
+        };
+        await _payments.AddAsync(payment, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+
+        return ApiResponse<PaytrIframeTokenDto>.SuccessResult(new PaytrIframeTokenDto
+        {
+            PaymentTransactionId = payment.Id,
+            OrderId = order.Id,
+            MerchantOid = merchantOid,
+            IframeToken = iframeToken,
+            IframeUrl = $"{_options.IframeBaseUrl.TrimEnd('/')}/{iframeToken}",
+            Amount = order.GrandTotal,
+            CurrencyCode = order.CurrencyCode,
+            TestMode = _options.TestMode
+        }, "PayTR iFrame token oluşturuldu.");
+    }
+
+    public async Task<ApiResponse<string>> HandleCallbackAsync(IFormCollection form, CancellationToken cancellationToken = default)
+    {
+        if (!HasCredentials())
+        {
+            return ApiResponse<string>.ErrorResult("PayTR ayarları eksik.", statusCode: 400);
+        }
+
+        var merchantOid = form["merchant_oid"].ToString();
+        var status = form["status"].ToString();
+        var totalAmount = form["total_amount"].ToString();
+        var incomingHash = form["hash"].ToString();
+        if (string.IsNullOrWhiteSpace(merchantOid) || string.IsNullOrWhiteSpace(status) || string.IsNullOrWhiteSpace(totalAmount) || string.IsNullOrWhiteSpace(incomingHash))
+        {
+            return ApiResponse<string>.ErrorResult("PayTR callback alanları eksik.", statusCode: 400);
+        }
+
+        var expectedHash = CreateCallbackHash(merchantOid, status, totalAmount);
+        if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(expectedHash), Encoding.UTF8.GetBytes(incomingHash)))
+        {
+            return ApiResponse<string>.ErrorResult("PAYTR notification failed: bad hash", statusCode: 400);
+        }
+
+        var payment = await _payments.Query(tracking: true)
+            .Include(x => x.Order)
+            .FirstOrDefaultAsync(x => !x.IsDeleted && x.ProviderKey == "PAYTR" && x.ExternalTransactionId == merchantOid, cancellationToken);
+        if (payment is null)
+        {
+            return ApiResponse<string>.ErrorResult("PayTR ödeme kaydı bulunamadı.", statusCode: 404);
+        }
+
+        if (string.Equals(payment.Status, B2bWorkflowStatuses.Completed, StringComparison.OrdinalIgnoreCase))
+        {
+            return ApiResponse<string>.SuccessResult("OK", "PayTR callback daha önce işlendi.");
+        }
+
+        payment.CallbackPayloadJson = JsonSerializer.Serialize(form.ToDictionary(x => x.Key, x => x.Value.ToString()), JsonOptions);
+        if (string.Equals(status, "success", StringComparison.OrdinalIgnoreCase))
+        {
+            payment.Status = B2bWorkflowStatuses.Completed;
+            payment.CompletedDate = DateTimeProvider.Now;
+            if (payment.Order is not null && string.Equals(payment.Order.Status, B2bWorkflowStatuses.WaitingPayment, StringComparison.OrdinalIgnoreCase))
+            {
+                payment.Order.Status = B2bWorkflowStatuses.Submitted;
+                payment.Order.SetUpdatedInfo();
+            }
+        }
+        else
+        {
+            payment.Status = B2bWorkflowStatuses.Failed;
+            payment.CompletedDate = DateTimeProvider.Now;
+        }
+
+        payment.SetUpdatedInfo();
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<string>.SuccessResult("OK", "PayTR callback işlendi.");
+    }
+
+    private bool HasCredentials()
+    {
+        return !string.IsNullOrWhiteSpace(_options.MerchantId)
+            && !string.IsNullOrWhiteSpace(_options.MerchantKey)
+            && !string.IsNullOrWhiteSpace(_options.MerchantSalt);
+    }
+
+    private string CreateRequestToken(string userIp, string merchantOid, string email, string amountInKurus, string userBasket, string currency)
+    {
+        var hashString = _options.MerchantId
+            + userIp
+            + merchantOid
+            + email.Trim()
+            + amountInKurus
+            + userBasket
+            + (_options.NoInstallment ? "1" : "0")
+            + _options.MaxInstallment.ToString(CultureInfo.InvariantCulture)
+            + currency
+            + (_options.TestMode ? "1" : "0");
+        return HmacBase64(hashString + _options.MerchantSalt);
+    }
+
+    private string CreateCallbackHash(string merchantOid, string status, string totalAmount)
+    {
+        return HmacBase64(merchantOid + _options.MerchantSalt + status + totalAmount);
+    }
+
+    private string HmacBase64(string value)
+    {
+        using var hmac = new HMACSHA256(Encoding.UTF8.GetBytes(_options.MerchantKey));
+        return Convert.ToBase64String(hmac.ComputeHash(Encoding.UTF8.GetBytes(value)));
+    }
+
+    private static string CreateBasket(B2bOrder order)
+    {
+        var lines = order.Lines.Where(x => !x.IsDeleted).Select(x => new object[]
+        {
+            x.ProductName ?? x.ProductSku ?? x.ErpStockId?.ToString(CultureInfo.InvariantCulture) ?? "B2B Ürün",
+            Math.Round(x.UnitPrice, 2),
+            Math.Max(1, (int)Math.Ceiling(x.Quantity))
+        }).ToList();
+        if (lines.Count == 0)
+        {
+            lines.Add(new object[] { order.OrderNumber, Math.Round(order.GrandTotal, 2), 1 });
+        }
+
+        return Convert.ToBase64String(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(lines, JsonOptions)));
+    }
+
+    private static string CreateMerchantOid(long orderId)
+    {
+        return $"B2B{orderId}{DateTimeProvider.Now:yyyyMMddHHmmssfff}";
+    }
+
+    private static string ToMinorUnit(decimal amount)
+    {
+        return ((int)Math.Round(amount * 100m, MidpointRounding.AwayFromZero)).ToString(CultureInfo.InvariantCulture);
+    }
+
+    private static string ToPaytrCurrency(string currencyCode)
+    {
+        var value = string.IsNullOrWhiteSpace(currencyCode) ? "TL" : currencyCode.Trim().ToUpperInvariant();
+        return value is "TRY" ? "TL" : value;
+    }
+
+    private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+}

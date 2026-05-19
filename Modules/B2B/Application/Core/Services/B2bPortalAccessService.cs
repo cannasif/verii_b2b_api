@@ -17,6 +17,7 @@ public sealed class B2bPortalAccessService : IB2bPortalAccessService
     private readonly IRepository<B2bCompany> _companies;
     private readonly IRepository<B2bBuyer> _buyers;
     private readonly IRepository<B2bCart> _carts;
+    private readonly IRepository<B2bOrder> _orders;
     private readonly byte[] _secret;
     private readonly TimeProvider _timeProvider;
 
@@ -24,12 +25,14 @@ public sealed class B2bPortalAccessService : IB2bPortalAccessService
         IRepository<B2bCompany> companies,
         IRepository<B2bBuyer> buyers,
         IRepository<B2bCart> carts,
+        IRepository<B2bOrder> orders,
         IConfiguration configuration,
         TimeProvider timeProvider)
     {
         _companies = companies;
         _buyers = buyers;
         _carts = carts;
+        _orders = orders;
         _timeProvider = timeProvider;
         _secret = Encoding.UTF8.GetBytes(configuration["Jwt:SecretKey"] ?? "YourSuperSecretKeyThatIsAtLeast32CharactersLong!");
     }
@@ -273,6 +276,43 @@ public sealed class B2bPortalAccessService : IB2bPortalAccessService
         }
 
         return ApiResponse<long>.ErrorResult("Bu sepet için portal erişiminiz yok", statusCode: 403);
+    }
+
+    public async Task<ApiResponse<long>> ValidateOrderAccessAsync(HttpRequest request, long orderId, CancellationToken cancellationToken = default)
+    {
+        var validation = await ValidateRequestAsync(request, cancellationToken);
+        if (!validation.Success)
+        {
+            return validation;
+        }
+
+        if (validation.Data == AuthenticatedBackofficeUser)
+        {
+            return validation;
+        }
+
+        var order = await _orders.Query()
+            .Where(x => !x.IsDeleted && x.Id == orderId)
+            .Select(x => new { x.CustomerId, x.BuyerId, x.UserId })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        if (order is null || order.CustomerId != validation.Data)
+        {
+            return ApiResponse<long>.ErrorResult("Bu sipariş için portal erişiminiz yok", statusCode: 403);
+        }
+
+        var context = await ValidateContextAsync(request, cancellationToken);
+        if (!context.Success || context.Data is null)
+        {
+            return ApiResponse<long>.ErrorResult(context.Message, context.ExceptionMessage, context.StatusCode);
+        }
+
+        if (context.Data.CanViewCompanyHistory || (context.Data.BuyerId.HasValue && order.BuyerId == context.Data.BuyerId) || (context.Data.UserId.HasValue && order.UserId == context.Data.UserId))
+        {
+            return validation;
+        }
+
+        return ApiResponse<long>.ErrorResult("Bu sipariş için portal erişiminiz yok", statusCode: 403);
     }
 
     private ApiResponse<B2bPortalTokenPayload> ValidateToken(HttpRequest request)

@@ -330,3 +330,27 @@ public sealed class UpdatePaymentStatusDto
     [StringLength(160)] public string? ExternalTransactionId { get; set; }
     public string? CallbackPayloadJson { get; set; }
 }
+
+public sealed class CreatePaytrIframeTokenDto
+{
+    public long OrderId { get; set; }
+    [Required, EmailAddress, StringLength(100)] public string Email { get; set; } = string.Empty;
+    [Required, StringLength(100)] public string UserName { get; set; } = string.Empty;
+    [Required, StringLength(400)] public string UserAddress { get; set; } = string.Empty;
+    [Required, StringLength(20)] public string UserPhone { get; set; } = string.Empty;
+    [StringLength(500)] public string? OkUrl { get; set; }
+    [StringLength(500)] public string? FailUrl { get; set; }
+    [StringLength(39)] public string? UserIp { get; set; }
+}
+
+public sealed class PaytrIframeTokenDto
+{
+    public long PaymentTransactionId { get; set; }
+    public long OrderId { get; set; }
+    public string MerchantOid { get; set; } = string.Empty;
+    public string IframeToken { get; set; } = string.Empty;
+    public string IframeUrl { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string CurrencyCode { get; set; } = "TRY";
+    public bool TestMode { get; set; }
+}

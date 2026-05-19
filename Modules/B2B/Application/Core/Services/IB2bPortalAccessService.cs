@@ -13,4 +13,5 @@ public interface IB2bPortalAccessService
     Task<ApiResponse<B2bPortalContextDto>> ValidateCustomerContextAsync(HttpRequest request, long customerId, CancellationToken cancellationToken = default);
     Task<ApiResponse<long>> ValidateCustomerAccessAsync(HttpRequest request, long customerId, CancellationToken cancellationToken = default);
     Task<ApiResponse<long>> ValidateCartAccessAsync(HttpRequest request, long cartId, CancellationToken cancellationToken = default);
+    Task<ApiResponse<long>> ValidateOrderAccessAsync(HttpRequest request, long orderId, CancellationToken cancellationToken = default);
 }

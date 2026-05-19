@@ -54,6 +54,7 @@ public static class ServiceCollectionExtensions
         services.Configure<SmtpOptions>(configuration.GetSection("Smtp"));
         services.Configure<HangfireMonitoringOptions>(configuration.GetSection("HangfireMonitoring"));
         services.Configure<PragmaticCorsOptions>(configuration.GetSection("Cors"));
+        services.Configure<PaytrOptions>(configuration.GetSection(PaytrOptions.SectionName));
         services.AddNetsisIntegrationsModule(configuration);
 
         var corsOptions = configuration.GetSection("Cors").Get<PragmaticCorsOptions>() ?? new PragmaticCorsOptions();
@@ -237,6 +238,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IB2bAccountService, B2bAccountService>();
         services.AddScoped<IB2bPortalAccessService, B2bPortalAccessService>();
         services.AddScoped<IB2bInsightService, B2bInsightService>();
+        services.AddHttpClient<IPaytrPaymentService, PaytrPaymentService>();
 
         services.AddScoped<IJobService, JobService>();
         services.AddScoped<ITraceExplorerService, TraceExplorerService>();
