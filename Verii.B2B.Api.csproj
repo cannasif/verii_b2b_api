@@ -5,6 +5,8 @@
     <Nullable>enable</Nullable>
     <UseAppHost>false</UseAppHost>
     <NuGetAudit>false</NuGetAudit>
+    <AssemblyName>Verii.B2B.Api</AssemblyName>
+    <RootNamespace>Wms</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
     <Compile Remove="tests/**/*.cs" />
