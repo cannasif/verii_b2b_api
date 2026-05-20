@@ -40,6 +40,12 @@ public sealed class WmsDbContext : DbContext
     public DbSet<YapKod> YapKodlar => Set<YapKod>();
     public DbSet<CatalogProduct> CatalogProducts => Set<CatalogProduct>();
     public DbSet<CatalogVariant> CatalogVariants => Set<CatalogVariant>();
+    public DbSet<CatalogCategory> CatalogCategories => Set<CatalogCategory>();
+    public DbSet<CatalogProductCategory> CatalogProductCategories => Set<CatalogProductCategory>();
+    public DbSet<CatalogAttributeDefinition> CatalogAttributeDefinitions => Set<CatalogAttributeDefinition>();
+    public DbSet<CatalogProductAttribute> CatalogProductAttributes => Set<CatalogProductAttribute>();
+    public DbSet<CatalogProductMedia> CatalogProductMedia => Set<CatalogProductMedia>();
+    public DbSet<CatalogProductDocument> CatalogProductDocuments => Set<CatalogProductDocument>();
     public DbSet<CustomerProductAlias> CustomerProductAliases => Set<CustomerProductAlias>();
     public DbSet<B2bCart> B2bCarts => Set<B2bCart>();
     public DbSet<B2bCartLine> B2bCartLines => Set<B2bCartLine>();

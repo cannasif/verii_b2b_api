@@ -76,4 +76,67 @@ public sealed class B2bCatalogController : ControllerBase
         var result = await _service.UpsertVariantAsync(productId, dto, cancellationToken);
         return StatusCode(result.StatusCode, result);
     }
+
+    [HttpPost("categories/paged")]
+    public async Task<ActionResult<ApiResponse<PagedResponse<CatalogCategoryDto>>>> GetCategories([FromBody] PagedRequest request, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.GetCatalogCategoriesAsync(request, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPost("categories")]
+    public async Task<ActionResult<ApiResponse<CatalogCategoryDto>>> CreateCategory([FromBody] CreateCatalogCategoryDto dto, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.CreateCatalogCategoryAsync(dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPut("categories/{id:long}")]
+    public async Task<ActionResult<ApiResponse<CatalogCategoryDto>>> UpdateCategory(long id, [FromBody] UpdateCatalogCategoryDto dto, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.UpdateCatalogCategoryAsync(id, dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPost("{productId:long}/categories")]
+    public async Task<ActionResult<ApiResponse<CatalogProductCategoryDto>>> AssignCategory(long productId, [FromBody] AssignCatalogProductCategoryDto dto, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.AssignCatalogProductCategoryAsync(productId, dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPost("attributes/paged")]
+    public async Task<ActionResult<ApiResponse<PagedResponse<CatalogAttributeDefinitionDto>>>> GetAttributeDefinitions([FromBody] PagedRequest request, [FromQuery] long? categoryId, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.GetCatalogAttributeDefinitionsAsync(request, categoryId, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPost("attributes")]
+    public async Task<ActionResult<ApiResponse<CatalogAttributeDefinitionDto>>> CreateAttributeDefinition([FromBody] CreateCatalogAttributeDefinitionDto dto, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.CreateCatalogAttributeDefinitionAsync(dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPost("{productId:long}/attributes")]
+    public async Task<ActionResult<ApiResponse<CatalogProductAttributeDto>>> UpsertProductAttribute(long productId, [FromBody] UpsertCatalogProductAttributeDto dto, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.UpsertCatalogProductAttributeAsync(productId, dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPost("{productId:long}/media")]
+    public async Task<ActionResult<ApiResponse<CatalogProductMediaDto>>> UpsertProductMedia(long productId, [FromBody] UpsertCatalogProductMediaDto dto, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.UpsertCatalogProductMediaAsync(productId, dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPost("{productId:long}/documents")]
+    public async Task<ActionResult<ApiResponse<CatalogProductDocumentDto>>> UpsertProductDocument(long productId, [FromBody] UpsertCatalogProductDocumentDto dto, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.UpsertCatalogProductDocumentAsync(productId, dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
 }

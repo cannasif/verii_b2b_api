@@ -11,6 +11,15 @@ public interface IB2bCommerceService
     Task<ApiResponse<CatalogProductDto>> CreateCatalogProductAsync(CreateCatalogProductDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<CatalogProductDto>> UpdateCatalogProductAsync(long id, UpdateCatalogProductDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<CatalogVariantDto>> UpsertVariantAsync(long productId, UpsertCatalogVariantDto dto, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PagedResponse<CatalogCategoryDto>>> GetCatalogCategoriesAsync(PagedRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<CatalogCategoryDto>> CreateCatalogCategoryAsync(CreateCatalogCategoryDto dto, CancellationToken cancellationToken = default);
+    Task<ApiResponse<CatalogCategoryDto>> UpdateCatalogCategoryAsync(long id, UpdateCatalogCategoryDto dto, CancellationToken cancellationToken = default);
+    Task<ApiResponse<CatalogProductCategoryDto>> AssignCatalogProductCategoryAsync(long productId, AssignCatalogProductCategoryDto dto, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PagedResponse<CatalogAttributeDefinitionDto>>> GetCatalogAttributeDefinitionsAsync(PagedRequest request, long? categoryId = null, CancellationToken cancellationToken = default);
+    Task<ApiResponse<CatalogAttributeDefinitionDto>> CreateCatalogAttributeDefinitionAsync(CreateCatalogAttributeDefinitionDto dto, CancellationToken cancellationToken = default);
+    Task<ApiResponse<CatalogProductAttributeDto>> UpsertCatalogProductAttributeAsync(long productId, UpsertCatalogProductAttributeDto dto, CancellationToken cancellationToken = default);
+    Task<ApiResponse<CatalogProductMediaDto>> UpsertCatalogProductMediaAsync(long productId, UpsertCatalogProductMediaDto dto, CancellationToken cancellationToken = default);
+    Task<ApiResponse<CatalogProductDocumentDto>> UpsertCatalogProductDocumentAsync(long productId, UpsertCatalogProductDocumentDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<PagedResponse<CustomerProductAliasDto>>> GetAliasesAsync(PagedRequest request, long? customerId = null, CancellationToken cancellationToken = default);
     Task<ApiResponse<CustomerProductAliasDto>> CreateAliasAsync(CreateCustomerProductAliasDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<CustomerProductAliasDto>> UpdateAliasAsync(long id, UpdateCustomerProductAliasDto dto, CancellationToken cancellationToken = default);

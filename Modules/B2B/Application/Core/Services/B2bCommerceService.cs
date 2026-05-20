@@ -12,6 +12,12 @@ public sealed class B2bCommerceService : IB2bCommerceService
 {
     private readonly IRepository<CatalogProduct> _catalogProducts;
     private readonly IRepository<CatalogVariant> _catalogVariants;
+    private readonly IRepository<CatalogCategory> _catalogCategories;
+    private readonly IRepository<CatalogProductCategory> _catalogProductCategories;
+    private readonly IRepository<CatalogAttributeDefinition> _catalogAttributeDefinitions;
+    private readonly IRepository<CatalogProductAttribute> _catalogProductAttributes;
+    private readonly IRepository<CatalogProductMedia> _catalogProductMedia;
+    private readonly IRepository<CatalogProductDocument> _catalogProductDocuments;
     private readonly IRepository<CustomerProductAlias> _aliases;
     private readonly IRepository<B2bCart> _carts;
     private readonly IRepository<B2bCartLine> _cartLines;
@@ -29,6 +35,12 @@ public sealed class B2bCommerceService : IB2bCommerceService
     public B2bCommerceService(
         IRepository<CatalogProduct> catalogProducts,
         IRepository<CatalogVariant> catalogVariants,
+        IRepository<CatalogCategory> catalogCategories,
+        IRepository<CatalogProductCategory> catalogProductCategories,
+        IRepository<CatalogAttributeDefinition> catalogAttributeDefinitions,
+        IRepository<CatalogProductAttribute> catalogProductAttributes,
+        IRepository<CatalogProductMedia> catalogProductMedia,
+        IRepository<CatalogProductDocument> catalogProductDocuments,
         IRepository<CustomerProductAlias> aliases,
         IRepository<B2bCart> carts,
         IRepository<B2bCartLine> cartLines,
@@ -45,6 +57,12 @@ public sealed class B2bCommerceService : IB2bCommerceService
     {
         _catalogProducts = catalogProducts;
         _catalogVariants = catalogVariants;
+        _catalogCategories = catalogCategories;
+        _catalogProductCategories = catalogProductCategories;
+        _catalogAttributeDefinitions = catalogAttributeDefinitions;
+        _catalogProductAttributes = catalogProductAttributes;
+        _catalogProductMedia = catalogProductMedia;
+        _catalogProductDocuments = catalogProductDocuments;
         _aliases = aliases;
         _carts = carts;
         _cartLines = cartLines;
@@ -75,6 +93,10 @@ public sealed class B2bCommerceService : IB2bCommerceService
         request ??= new PagedRequest();
         var query = _catalogProducts.Query()
             .Include(x => x.Variants.Where(v => !v.IsDeleted))
+            .Include(x => x.ProductCategories.Where(v => !v.IsDeleted)).ThenInclude(x => x.CatalogCategory)
+            .Include(x => x.ProductAttributes.Where(v => !v.IsDeleted)).ThenInclude(x => x.AttributeDefinition)
+            .Include(x => x.MediaItems.Where(v => !v.IsDeleted))
+            .Include(x => x.Documents.Where(v => !v.IsDeleted))
             .Where(x => !x.IsDeleted);
 
         if (publishedOnly)
@@ -113,6 +135,10 @@ public sealed class B2bCommerceService : IB2bCommerceService
     {
         var item = await _catalogProducts.Query()
             .Include(x => x.Variants.Where(v => !v.IsDeleted))
+            .Include(x => x.ProductCategories.Where(v => !v.IsDeleted)).ThenInclude(x => x.CatalogCategory)
+            .Include(x => x.ProductAttributes.Where(v => !v.IsDeleted)).ThenInclude(x => x.AttributeDefinition)
+            .Include(x => x.MediaItems.Where(v => !v.IsDeleted))
+            .Include(x => x.Documents.Where(v => !v.IsDeleted))
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
         return item == null
             ? ApiResponse<CatalogProductDto>.ErrorResult("Catalog product not found", statusCode: 404)
@@ -170,6 +196,10 @@ public sealed class B2bCommerceService : IB2bCommerceService
     {
         var entity = await _catalogProducts.Query(tracking: true)
             .Include(x => x.Variants.Where(v => !v.IsDeleted))
+            .Include(x => x.ProductCategories.Where(v => !v.IsDeleted)).ThenInclude(x => x.CatalogCategory)
+            .Include(x => x.ProductAttributes.Where(v => !v.IsDeleted)).ThenInclude(x => x.AttributeDefinition)
+            .Include(x => x.MediaItems.Where(v => !v.IsDeleted))
+            .Include(x => x.Documents.Where(v => !v.IsDeleted))
             .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
         if (entity == null)
         {
@@ -252,6 +282,309 @@ public sealed class B2bCommerceService : IB2bCommerceService
         variant.SetUpdatedInfo();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return ApiResponse<CatalogVariantDto>.SuccessResult(MapCatalogVariant(variant), "Catalog variant saved successfully");
+    }
+
+    public async Task<ApiResponse<PagedResponse<CatalogCategoryDto>>> GetCatalogCategoriesAsync(PagedRequest request, CancellationToken cancellationToken = default)
+    {
+        request ??= new PagedRequest();
+        var query = _catalogCategories.Query().Where(x => !x.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search.Trim();
+            query = query.Where(x =>
+                x.Code.Contains(search) ||
+                x.Name.Contains(search) ||
+                (x.FullPath != null && x.FullPath.Contains(search)));
+        }
+
+        query = query.OrderBy(x => x.Level).ThenBy(x => x.SortOrder).ThenBy(x => x.Name);
+        var total = await query.CountAsync(cancellationToken);
+        var pageNumber = request.PageNumber < 1 ? 1 : request.PageNumber;
+        var pageSize = request.PageSize < 1 ? 50 : request.PageSize;
+        var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        return ApiResponse<PagedResponse<CatalogCategoryDto>>.SuccessResult(
+            new PagedResponse<CatalogCategoryDto>(items.Select(MapCatalogCategory).ToList(), total, pageNumber, pageSize),
+            "Catalog categories retrieved successfully");
+    }
+
+    public async Task<ApiResponse<CatalogCategoryDto>> CreateCatalogCategoryAsync(CreateCatalogCategoryDto dto, CancellationToken cancellationToken = default)
+    {
+        var code = Normalize(dto.Code);
+        var duplicate = await _catalogCategories.Query().AnyAsync(x => x.Code == code && !x.IsDeleted, cancellationToken);
+        if (duplicate)
+        {
+            return ApiResponse<CatalogCategoryDto>.ErrorResult("Catalog category code already exists", statusCode: 400);
+        }
+
+        var parent = dto.ParentCategoryId.HasValue
+            ? await _catalogCategories.Query().FirstOrDefaultAsync(x => x.Id == dto.ParentCategoryId.Value && !x.IsDeleted, cancellationToken)
+            : null;
+        if (dto.ParentCategoryId.HasValue && parent == null)
+        {
+            return ApiResponse<CatalogCategoryDto>.ErrorResult("Parent category not found", statusCode: 404);
+        }
+
+        var name = dto.Name.Trim();
+        var entity = new CatalogCategory
+        {
+            ParentCategoryId = dto.ParentCategoryId,
+            Code = code,
+            Name = name,
+            Description = Trim(dto.Description),
+            Level = parent == null ? 1 : parent.Level + 1,
+            FullPath = BuildCategoryFullPath(parent, name),
+            SortOrder = dto.SortOrder,
+            ImageUrl = Trim(dto.ImageUrl),
+            IconName = Trim(dto.IconName),
+            ColorHex = Trim(dto.ColorHex),
+            IsLeaf = dto.IsLeaf,
+            IsActive = dto.IsActive,
+            CreatedDate = DateTimeProvider.Now
+        };
+
+        await _catalogCategories.AddAsync(entity, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<CatalogCategoryDto>.SuccessResult(MapCatalogCategory(entity), "Catalog category created successfully");
+    }
+
+    public async Task<ApiResponse<CatalogCategoryDto>> UpdateCatalogCategoryAsync(long id, UpdateCatalogCategoryDto dto, CancellationToken cancellationToken = default)
+    {
+        var entity = await _catalogCategories.Query(tracking: true).FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (entity == null)
+        {
+            return ApiResponse<CatalogCategoryDto>.ErrorResult("Catalog category not found", statusCode: 404);
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Code))
+        {
+            var code = Normalize(dto.Code);
+            var duplicate = await _catalogCategories.Query().AnyAsync(x => x.Id != id && x.Code == code && !x.IsDeleted, cancellationToken);
+            if (duplicate)
+            {
+                return ApiResponse<CatalogCategoryDto>.ErrorResult("Catalog category code already exists", statusCode: 400);
+            }
+            entity.Code = code;
+        }
+
+        if (dto.ParentCategoryId.HasValue && dto.ParentCategoryId.Value == id)
+        {
+            return ApiResponse<CatalogCategoryDto>.ErrorResult("Category cannot be its own parent", statusCode: 400);
+        }
+
+        CatalogCategory? parent = null;
+        if (dto.ParentCategoryId.HasValue)
+        {
+            parent = await _catalogCategories.Query().FirstOrDefaultAsync(x => x.Id == dto.ParentCategoryId.Value && !x.IsDeleted, cancellationToken);
+            if (parent == null)
+            {
+                return ApiResponse<CatalogCategoryDto>.ErrorResult("Parent category not found", statusCode: 404);
+            }
+            entity.ParentCategoryId = dto.ParentCategoryId.Value;
+            entity.Level = parent.Level + 1;
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Name)) entity.Name = dto.Name.Trim();
+        entity.Description = dto.Description ?? entity.Description;
+        entity.SortOrder = dto.SortOrder ?? entity.SortOrder;
+        entity.ImageUrl = dto.ImageUrl ?? entity.ImageUrl;
+        entity.IconName = dto.IconName ?? entity.IconName;
+        entity.ColorHex = dto.ColorHex ?? entity.ColorHex;
+        entity.IsLeaf = dto.IsLeaf ?? entity.IsLeaf;
+        entity.IsActive = dto.IsActive ?? entity.IsActive;
+        entity.FullPath = BuildCategoryFullPath(parent, entity.Name);
+        entity.SetUpdatedInfo();
+        _catalogCategories.Update(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<CatalogCategoryDto>.SuccessResult(MapCatalogCategory(entity), "Catalog category updated successfully");
+    }
+
+    public async Task<ApiResponse<CatalogProductCategoryDto>> AssignCatalogProductCategoryAsync(long productId, AssignCatalogProductCategoryDto dto, CancellationToken cancellationToken = default)
+    {
+        var product = await _catalogProducts.Query(tracking: true).FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
+        if (product == null) return ApiResponse<CatalogProductCategoryDto>.ErrorResult("Catalog product not found", statusCode: 404);
+
+        var category = await _catalogCategories.Query().FirstOrDefaultAsync(x => x.Id == dto.CatalogCategoryId && !x.IsDeleted && x.IsActive, cancellationToken);
+        if (category == null) return ApiResponse<CatalogProductCategoryDto>.ErrorResult("Catalog category not found", statusCode: 404);
+
+        if (dto.IsPrimary)
+        {
+            var existingPrimary = await _catalogProductCategories.Query(tracking: true)
+                .Where(x => !x.IsDeleted && x.CatalogProductId == productId && x.IsPrimary)
+                .ToListAsync(cancellationToken);
+            foreach (var item in existingPrimary)
+            {
+                item.IsPrimary = false;
+                item.SetUpdatedInfo();
+            }
+            product.CategoryPath = category.FullPath ?? category.Name;
+        }
+
+        var entity = await _catalogProductCategories.Query(tracking: true)
+            .FirstOrDefaultAsync(x => x.CatalogProductId == productId && x.CatalogCategoryId == dto.CatalogCategoryId && !x.IsDeleted, cancellationToken);
+        if (entity == null)
+        {
+            entity = new CatalogProductCategory { CatalogProductId = productId, CatalogCategoryId = dto.CatalogCategoryId, CreatedDate = DateTimeProvider.Now };
+            await _catalogProductCategories.AddAsync(entity, cancellationToken);
+        }
+
+        entity.IsPrimary = dto.IsPrimary;
+        entity.SortOrder = dto.SortOrder;
+        entity.AssignmentSource = Trim(dto.AssignmentSource) ?? "Manual";
+        entity.SetUpdatedInfo();
+        product.CompletenessScore = CalculateCatalogCompleteness(product);
+        product.SearchText = BuildSearchText(product);
+        product.SetUpdatedInfo();
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<CatalogProductCategoryDto>.SuccessResult(MapCatalogProductCategory(entity, category), "Catalog product category assigned successfully");
+    }
+
+    public async Task<ApiResponse<PagedResponse<CatalogAttributeDefinitionDto>>> GetCatalogAttributeDefinitionsAsync(PagedRequest request, long? categoryId = null, CancellationToken cancellationToken = default)
+    {
+        request ??= new PagedRequest();
+        var query = _catalogAttributeDefinitions.Query().Where(x => !x.IsDeleted);
+        if (categoryId.HasValue) query = query.Where(x => x.CatalogCategoryId == categoryId.Value || x.CatalogCategoryId == null);
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search.Trim();
+            query = query.Where(x => x.Code.Contains(search) || x.Name.Contains(search));
+        }
+
+        query = query.OrderBy(x => x.CatalogCategoryId.HasValue).ThenBy(x => x.SortOrder).ThenBy(x => x.Name);
+        var total = await query.CountAsync(cancellationToken);
+        var pageNumber = request.PageNumber < 1 ? 1 : request.PageNumber;
+        var pageSize = request.PageSize < 1 ? 50 : request.PageSize;
+        var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        return ApiResponse<PagedResponse<CatalogAttributeDefinitionDto>>.SuccessResult(
+            new PagedResponse<CatalogAttributeDefinitionDto>(items.Select(MapCatalogAttributeDefinition).ToList(), total, pageNumber, pageSize),
+            "Catalog attribute definitions retrieved successfully");
+    }
+
+    public async Task<ApiResponse<CatalogAttributeDefinitionDto>> CreateCatalogAttributeDefinitionAsync(CreateCatalogAttributeDefinitionDto dto, CancellationToken cancellationToken = default)
+    {
+        if (dto.CatalogCategoryId.HasValue)
+        {
+            var categoryExists = await _catalogCategories.Query().AnyAsync(x => x.Id == dto.CatalogCategoryId.Value && !x.IsDeleted, cancellationToken);
+            if (!categoryExists) return ApiResponse<CatalogAttributeDefinitionDto>.ErrorResult("Catalog category not found", statusCode: 404);
+        }
+
+        var code = Normalize(dto.Code);
+        var duplicate = await _catalogAttributeDefinitions.Query()
+            .AnyAsync(x => x.CatalogCategoryId == dto.CatalogCategoryId && x.Code == code && !x.IsDeleted, cancellationToken);
+        if (duplicate)
+        {
+            return ApiResponse<CatalogAttributeDefinitionDto>.ErrorResult("Catalog attribute code already exists for this category", statusCode: 400);
+        }
+
+        var entity = new CatalogAttributeDefinition
+        {
+            CatalogCategoryId = dto.CatalogCategoryId,
+            Code = code,
+            Name = dto.Name.Trim(),
+            DataType = NormalizeStatus(dto.DataType, "Text"),
+            IsRequired = dto.IsRequired,
+            IsFilterable = dto.IsFilterable,
+            IsComparable = dto.IsComparable,
+            Unit = Trim(dto.Unit),
+            AllowedValuesJson = Trim(dto.AllowedValuesJson),
+            SortOrder = dto.SortOrder,
+            IsActive = dto.IsActive,
+            CreatedDate = DateTimeProvider.Now
+        };
+        await _catalogAttributeDefinitions.AddAsync(entity, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<CatalogAttributeDefinitionDto>.SuccessResult(MapCatalogAttributeDefinition(entity), "Catalog attribute definition created successfully");
+    }
+
+    public async Task<ApiResponse<CatalogProductAttributeDto>> UpsertCatalogProductAttributeAsync(long productId, UpsertCatalogProductAttributeDto dto, CancellationToken cancellationToken = default)
+    {
+        var productExists = await _catalogProducts.Query().AnyAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
+        if (!productExists) return ApiResponse<CatalogProductAttributeDto>.ErrorResult("Catalog product not found", statusCode: 404);
+
+        var definition = await _catalogAttributeDefinitions.Query().FirstOrDefaultAsync(x => x.Id == dto.AttributeDefinitionId && !x.IsDeleted && x.IsActive, cancellationToken);
+        if (definition == null) return ApiResponse<CatalogProductAttributeDto>.ErrorResult("Catalog attribute definition not found", statusCode: 404);
+
+        var entity = await _catalogProductAttributes.Query(tracking: true)
+            .FirstOrDefaultAsync(x => x.CatalogProductId == productId && x.AttributeDefinitionId == dto.AttributeDefinitionId && !x.IsDeleted, cancellationToken);
+        if (entity == null)
+        {
+            entity = new CatalogProductAttribute { CatalogProductId = productId, AttributeDefinitionId = dto.AttributeDefinitionId, CreatedDate = DateTimeProvider.Now };
+            await _catalogProductAttributes.AddAsync(entity, cancellationToken);
+        }
+
+        entity.Value = dto.Value.Trim();
+        entity.NormalizedValue = NormalizeAttributeValue(dto.Value);
+        entity.Unit = Trim(dto.Unit) ?? definition.Unit;
+        entity.SortOrder = dto.SortOrder;
+        entity.SetUpdatedInfo();
+        await RefreshCatalogQualityAsync(productId, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<CatalogProductAttributeDto>.SuccessResult(MapCatalogProductAttribute(entity, definition), "Catalog product attribute saved successfully");
+    }
+
+    public async Task<ApiResponse<CatalogProductMediaDto>> UpsertCatalogProductMediaAsync(long productId, UpsertCatalogProductMediaDto dto, CancellationToken cancellationToken = default)
+    {
+        var product = await _catalogProducts.Query(tracking: true).FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
+        if (product == null) return ApiResponse<CatalogProductMediaDto>.ErrorResult("Catalog product not found", statusCode: 404);
+
+        if (dto.IsPrimary)
+        {
+            var existingPrimary = await _catalogProductMedia.Query(tracking: true)
+                .Where(x => !x.IsDeleted && x.CatalogProductId == productId && x.IsPrimary)
+                .ToListAsync(cancellationToken);
+            foreach (var item in existingPrimary)
+            {
+                item.IsPrimary = false;
+                item.SetUpdatedInfo();
+            }
+            product.PrimaryImageUrl = dto.Url.Trim();
+        }
+
+        var entity = dto.Id.HasValue
+            ? await _catalogProductMedia.Query(tracking: true).FirstOrDefaultAsync(x => x.Id == dto.Id.Value && x.CatalogProductId == productId && !x.IsDeleted, cancellationToken)
+            : null;
+        if (entity == null)
+        {
+            entity = new CatalogProductMedia { CatalogProductId = productId, CreatedDate = DateTimeProvider.Now };
+            await _catalogProductMedia.AddAsync(entity, cancellationToken);
+        }
+
+        entity.Url = dto.Url.Trim();
+        entity.MediaType = NormalizeStatus(dto.MediaType, "Image");
+        entity.AltText = Trim(dto.AltText);
+        entity.IsPrimary = dto.IsPrimary;
+        entity.SortOrder = dto.SortOrder;
+        entity.SetUpdatedInfo();
+        product.CompletenessScore = CalculateCatalogCompleteness(product);
+        product.SearchText = BuildSearchText(product);
+        product.SetUpdatedInfo();
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<CatalogProductMediaDto>.SuccessResult(MapCatalogProductMedia(entity), "Catalog product media saved successfully");
+    }
+
+    public async Task<ApiResponse<CatalogProductDocumentDto>> UpsertCatalogProductDocumentAsync(long productId, UpsertCatalogProductDocumentDto dto, CancellationToken cancellationToken = default)
+    {
+        var productExists = await _catalogProducts.Query().AnyAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
+        if (!productExists) return ApiResponse<CatalogProductDocumentDto>.ErrorResult("Catalog product not found", statusCode: 404);
+
+        var entity = dto.Id.HasValue
+            ? await _catalogProductDocuments.Query(tracking: true).FirstOrDefaultAsync(x => x.Id == dto.Id.Value && x.CatalogProductId == productId && !x.IsDeleted, cancellationToken)
+            : null;
+        if (entity == null)
+        {
+            entity = new CatalogProductDocument { CatalogProductId = productId, CreatedDate = DateTimeProvider.Now };
+            await _catalogProductDocuments.AddAsync(entity, cancellationToken);
+        }
+
+        entity.Name = dto.Name.Trim();
+        entity.Url = dto.Url.Trim();
+        entity.DocumentType = NormalizeStatus(dto.DocumentType, "TechnicalSheet");
+        entity.LanguageCode = Trim(dto.LanguageCode);
+        entity.SortOrder = dto.SortOrder;
+        entity.IsActive = dto.IsActive;
+        entity.SetUpdatedInfo();
+        await RefreshCatalogQualityAsync(productId, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<CatalogProductDocumentDto>.SuccessResult(MapCatalogProductDocument(entity), "Catalog product document saved successfully");
     }
 
     public async Task<ApiResponse<PagedResponse<CustomerProductAliasDto>>> GetAliasesAsync(PagedRequest request, long? customerId = null, CancellationToken cancellationToken = default)
@@ -1086,6 +1419,20 @@ public sealed class B2bCommerceService : IB2bCommerceService
         return query.OrderByDescending(x => x.SnapshotDate).FirstOrDefaultAsync(cancellationToken);
     }
 
+    private async Task RefreshCatalogQualityAsync(long productId, CancellationToken cancellationToken)
+    {
+        var product = await _catalogProducts.Query(tracking: true)
+            .FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
+        if (product == null)
+        {
+            return;
+        }
+
+        product.CompletenessScore = CalculateCatalogCompleteness(product);
+        product.SearchText = BuildSearchText(product);
+        product.SetUpdatedInfo();
+    }
+
     private static CatalogProductDto MapCatalogProduct(CatalogProduct entity) => new()
     {
         Id = entity.Id,
@@ -1118,7 +1465,11 @@ public sealed class B2bCommerceService : IB2bCommerceService
         IsPublished = entity.IsPublished,
         DefaultStockId = entity.DefaultStockId,
         PublishedDate = entity.PublishedDate,
-        Variants = entity.Variants.Where(x => !x.IsDeleted).Select(MapCatalogVariant).ToList()
+        Variants = entity.Variants.Where(x => !x.IsDeleted).Select(MapCatalogVariant).ToList(),
+        Categories = entity.ProductCategories.Where(x => !x.IsDeleted).Select(x => MapCatalogProductCategory(x, x.CatalogCategory)).ToList(),
+        Attributes = entity.ProductAttributes.Where(x => !x.IsDeleted).Select(x => MapCatalogProductAttribute(x, x.AttributeDefinition)).ToList(),
+        MediaItems = entity.MediaItems.Where(x => !x.IsDeleted).Select(MapCatalogProductMedia).ToList(),
+        Documents = entity.Documents.Where(x => !x.IsDeleted).Select(MapCatalogProductDocument).ToList()
     };
 
     private static CatalogVariantDto MapCatalogVariant(CatalogVariant entity) => new()
@@ -1135,6 +1486,107 @@ public sealed class B2bCommerceService : IB2bCommerceService
         Unit = entity.Unit,
         AttributesJson = entity.AttributesJson,
         MediaGalleryJson = entity.MediaGalleryJson,
+        SortOrder = entity.SortOrder,
+        IsActive = entity.IsActive
+    };
+
+    private static CatalogCategoryDto MapCatalogCategory(CatalogCategory entity) => new()
+    {
+        Id = entity.Id,
+        BranchCode = entity.BranchCode,
+        CreatedDate = entity.CreatedDate,
+        UpdatedDate = entity.UpdatedDate,
+        ParentCategoryId = entity.ParentCategoryId,
+        Code = entity.Code,
+        Name = entity.Name,
+        Description = entity.Description,
+        Level = entity.Level,
+        FullPath = entity.FullPath,
+        SortOrder = entity.SortOrder,
+        ImageUrl = entity.ImageUrl,
+        IconName = entity.IconName,
+        ColorHex = entity.ColorHex,
+        IsLeaf = entity.IsLeaf,
+        IsActive = entity.IsActive
+    };
+
+    private static CatalogProductCategoryDto MapCatalogProductCategory(CatalogProductCategory entity, CatalogCategory? category) => new()
+    {
+        Id = entity.Id,
+        BranchCode = entity.BranchCode,
+        CreatedDate = entity.CreatedDate,
+        UpdatedDate = entity.UpdatedDate,
+        CatalogProductId = entity.CatalogProductId,
+        CatalogCategoryId = entity.CatalogCategoryId,
+        CategoryCode = category?.Code,
+        CategoryName = category?.Name,
+        CategoryFullPath = category?.FullPath,
+        IsPrimary = entity.IsPrimary,
+        SortOrder = entity.SortOrder,
+        AssignmentSource = entity.AssignmentSource
+    };
+
+    private static CatalogAttributeDefinitionDto MapCatalogAttributeDefinition(CatalogAttributeDefinition entity) => new()
+    {
+        Id = entity.Id,
+        BranchCode = entity.BranchCode,
+        CreatedDate = entity.CreatedDate,
+        UpdatedDate = entity.UpdatedDate,
+        CatalogCategoryId = entity.CatalogCategoryId,
+        Code = entity.Code,
+        Name = entity.Name,
+        DataType = entity.DataType,
+        IsRequired = entity.IsRequired,
+        IsFilterable = entity.IsFilterable,
+        IsComparable = entity.IsComparable,
+        Unit = entity.Unit,
+        AllowedValuesJson = entity.AllowedValuesJson,
+        SortOrder = entity.SortOrder,
+        IsActive = entity.IsActive
+    };
+
+    private static CatalogProductAttributeDto MapCatalogProductAttribute(CatalogProductAttribute entity, CatalogAttributeDefinition? definition) => new()
+    {
+        Id = entity.Id,
+        BranchCode = entity.BranchCode,
+        CreatedDate = entity.CreatedDate,
+        UpdatedDate = entity.UpdatedDate,
+        CatalogProductId = entity.CatalogProductId,
+        AttributeDefinitionId = entity.AttributeDefinitionId,
+        AttributeCode = definition?.Code,
+        AttributeName = definition?.Name,
+        DataType = definition?.DataType,
+        Value = entity.Value,
+        NormalizedValue = entity.NormalizedValue,
+        Unit = entity.Unit,
+        SortOrder = entity.SortOrder
+    };
+
+    private static CatalogProductMediaDto MapCatalogProductMedia(CatalogProductMedia entity) => new()
+    {
+        Id = entity.Id,
+        BranchCode = entity.BranchCode,
+        CreatedDate = entity.CreatedDate,
+        UpdatedDate = entity.UpdatedDate,
+        CatalogProductId = entity.CatalogProductId,
+        Url = entity.Url,
+        MediaType = entity.MediaType,
+        AltText = entity.AltText,
+        IsPrimary = entity.IsPrimary,
+        SortOrder = entity.SortOrder
+    };
+
+    private static CatalogProductDocumentDto MapCatalogProductDocument(CatalogProductDocument entity) => new()
+    {
+        Id = entity.Id,
+        BranchCode = entity.BranchCode,
+        CreatedDate = entity.CreatedDate,
+        UpdatedDate = entity.UpdatedDate,
+        CatalogProductId = entity.CatalogProductId,
+        Name = entity.Name,
+        Url = entity.Url,
+        DocumentType = entity.DocumentType,
+        LanguageCode = entity.LanguageCode,
         SortOrder = entity.SortOrder,
         IsActive = entity.IsActive
     };
@@ -1452,6 +1904,12 @@ public sealed class B2bCommerceService : IB2bCommerceService
 
     private static string Normalize(string value) => value.Trim().ToUpperInvariant();
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string NormalizeAttributeValue(string value) => value.Trim().ToUpperInvariant();
+    private static string BuildCategoryFullPath(CatalogCategory? parent, string name)
+    {
+        var normalizedName = name.Trim();
+        return string.IsNullOrWhiteSpace(parent?.FullPath) ? normalizedName : $"{parent.FullPath} / {normalizedName}";
+    }
     private static string NormalizeCurrency(string value) => string.IsNullOrWhiteSpace(value) ? "TRY" : value.Trim().ToUpperInvariant();
     private static string NormalizeStatus(string? value, string fallback) => string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
     private static bool IsMatched(string? status) => string.Equals(status, "Matched", StringComparison.OrdinalIgnoreCase);

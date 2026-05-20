@@ -33,4 +33,8 @@ public sealed class CatalogProduct : BaseEntity
     public DateTime? PublishedDate { get; set; }
 
     public List<CatalogVariant> Variants { get; set; } = new();
+    public List<CatalogProductCategory> ProductCategories { get; set; } = new();
+    public List<CatalogProductAttribute> ProductAttributes { get; set; } = new();
+    public List<CatalogProductMedia> MediaItems { get; set; } = new();
+    public List<CatalogProductDocument> Documents { get; set; } = new();
 }

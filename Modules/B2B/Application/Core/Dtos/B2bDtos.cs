@@ -32,6 +32,10 @@ public sealed class CatalogProductDto : BaseEntityDto
     public long? DefaultStockId { get; set; }
     public DateTime? PublishedDate { get; set; }
     public List<CatalogVariantDto> Variants { get; set; } = new();
+    public List<CatalogProductCategoryDto> Categories { get; set; } = new();
+    public List<CatalogProductAttributeDto> Attributes { get; set; } = new();
+    public List<CatalogProductMediaDto> MediaItems { get; set; } = new();
+    public List<CatalogProductDocumentDto> Documents { get; set; } = new();
 }
 
 public sealed class CatalogVariantDto : BaseEntityDto
@@ -114,6 +118,163 @@ public sealed class UpsertCatalogVariantDto
     [StringLength(30)] public string? Unit { get; set; }
     public string? AttributesJson { get; set; }
     public string? MediaGalleryJson { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class CatalogCategoryDto : BaseEntityDto
+{
+    public long? ParentCategoryId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string? Description { get; set; }
+    public int Level { get; set; }
+    public string? FullPath { get; set; }
+    public int SortOrder { get; set; }
+    public string? ImageUrl { get; set; }
+    public string? IconName { get; set; }
+    public string? ColorHex { get; set; }
+    public bool IsLeaf { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public sealed class CreateCatalogCategoryDto
+{
+    public long? ParentCategoryId { get; set; }
+    [Required, StringLength(80)] public string Code { get; set; } = string.Empty;
+    [Required, StringLength(250)] public string Name { get; set; } = string.Empty;
+    [StringLength(1000)] public string? Description { get; set; }
+    public int SortOrder { get; set; }
+    [StringLength(500)] public string? ImageUrl { get; set; }
+    [StringLength(80)] public string? IconName { get; set; }
+    [StringLength(20)] public string? ColorHex { get; set; }
+    public bool IsLeaf { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class UpdateCatalogCategoryDto
+{
+    public long? ParentCategoryId { get; set; }
+    [StringLength(80)] public string? Code { get; set; }
+    [StringLength(250)] public string? Name { get; set; }
+    [StringLength(1000)] public string? Description { get; set; }
+    public int? SortOrder { get; set; }
+    [StringLength(500)] public string? ImageUrl { get; set; }
+    [StringLength(80)] public string? IconName { get; set; }
+    [StringLength(20)] public string? ColorHex { get; set; }
+    public bool? IsLeaf { get; set; }
+    public bool? IsActive { get; set; }
+}
+
+public sealed class CatalogProductCategoryDto : BaseEntityDto
+{
+    public long CatalogProductId { get; set; }
+    public long CatalogCategoryId { get; set; }
+    public string? CategoryCode { get; set; }
+    public string? CategoryName { get; set; }
+    public string? CategoryFullPath { get; set; }
+    public bool IsPrimary { get; set; }
+    public int SortOrder { get; set; }
+    public string? AssignmentSource { get; set; }
+}
+
+public sealed class AssignCatalogProductCategoryDto
+{
+    public long CatalogCategoryId { get; set; }
+    public bool IsPrimary { get; set; } = true;
+    public int SortOrder { get; set; }
+    [StringLength(40)] public string? AssignmentSource { get; set; } = "Manual";
+}
+
+public sealed class CatalogAttributeDefinitionDto : BaseEntityDto
+{
+    public long? CatalogCategoryId { get; set; }
+    public string Code { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string DataType { get; set; } = "Text";
+    public bool IsRequired { get; set; }
+    public bool IsFilterable { get; set; }
+    public bool IsComparable { get; set; }
+    public string? Unit { get; set; }
+    public string? AllowedValuesJson { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public sealed class CreateCatalogAttributeDefinitionDto
+{
+    public long? CatalogCategoryId { get; set; }
+    [Required, StringLength(80)] public string Code { get; set; } = string.Empty;
+    [Required, StringLength(160)] public string Name { get; set; } = string.Empty;
+    [StringLength(40)] public string DataType { get; set; } = "Text";
+    public bool IsRequired { get; set; }
+    public bool IsFilterable { get; set; }
+    public bool IsComparable { get; set; }
+    [StringLength(30)] public string? Unit { get; set; }
+    public string? AllowedValuesJson { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; } = true;
+}
+
+public sealed class CatalogProductAttributeDto : BaseEntityDto
+{
+    public long CatalogProductId { get; set; }
+    public long AttributeDefinitionId { get; set; }
+    public string? AttributeCode { get; set; }
+    public string? AttributeName { get; set; }
+    public string? DataType { get; set; }
+    public string Value { get; set; } = string.Empty;
+    public string? NormalizedValue { get; set; }
+    public string? Unit { get; set; }
+    public int SortOrder { get; set; }
+}
+
+public sealed class UpsertCatalogProductAttributeDto
+{
+    public long AttributeDefinitionId { get; set; }
+    [Required, StringLength(1000)] public string Value { get; set; } = string.Empty;
+    [StringLength(30)] public string? Unit { get; set; }
+    public int SortOrder { get; set; }
+}
+
+public sealed class CatalogProductMediaDto : BaseEntityDto
+{
+    public long CatalogProductId { get; set; }
+    public string Url { get; set; } = string.Empty;
+    public string MediaType { get; set; } = "Image";
+    public string? AltText { get; set; }
+    public bool IsPrimary { get; set; }
+    public int SortOrder { get; set; }
+}
+
+public sealed class UpsertCatalogProductMediaDto
+{
+    public long? Id { get; set; }
+    [Required, StringLength(500)] public string Url { get; set; } = string.Empty;
+    [StringLength(40)] public string MediaType { get; set; } = "Image";
+    [StringLength(250)] public string? AltText { get; set; }
+    public bool IsPrimary { get; set; }
+    public int SortOrder { get; set; }
+}
+
+public sealed class CatalogProductDocumentDto : BaseEntityDto
+{
+    public long CatalogProductId { get; set; }
+    public string Name { get; set; } = string.Empty;
+    public string Url { get; set; } = string.Empty;
+    public string DocumentType { get; set; } = "TechnicalSheet";
+    public string? LanguageCode { get; set; }
+    public int SortOrder { get; set; }
+    public bool IsActive { get; set; }
+}
+
+public sealed class UpsertCatalogProductDocumentDto
+{
+    public long? Id { get; set; }
+    [Required, StringLength(160)] public string Name { get; set; } = string.Empty;
+    [Required, StringLength(500)] public string Url { get; set; } = string.Empty;
+    [StringLength(60)] public string DocumentType { get; set; } = "TechnicalSheet";
+    [StringLength(10)] public string? LanguageCode { get; set; }
     public int SortOrder { get; set; }
     public bool IsActive { get; set; } = true;
 }
