@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using Microsoft.AspNetCore.Http;
 using Wms.Application.Common;
 
 namespace Wms.Application.B2B.Dtos;
@@ -255,6 +256,13 @@ public sealed class UpsertCatalogProductMediaDto
     [StringLength(250)] public string? AltText { get; set; }
     public bool IsPrimary { get; set; }
     public int SortOrder { get; set; }
+}
+
+public sealed class UploadCatalogProductMediaDto
+{
+    public List<IFormFile> Files { get; set; } = new();
+    public List<string>? AltTexts { get; set; }
+    public bool FirstImageAsPrimary { get; set; } = true;
 }
 
 public sealed class CatalogProductDocumentDto : BaseEntityDto

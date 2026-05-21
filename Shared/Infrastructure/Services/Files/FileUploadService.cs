@@ -54,6 +54,27 @@ public sealed class FileUploadService : IFileUploadService
         return ApiResponse<string>.SuccessResult(GetStockImageUrl(fileName, stockId), _localizationService.GetLocalizedString("StockImageUploadedSuccessfully"));
     }
 
+    public async Task<ApiResponse<string>> UploadCatalogProductImageAsync(IFormFile file, long catalogProductId, CancellationToken cancellationToken = default)
+    {
+        if (file == null || file.Length == 0)
+        {
+            var m = _localizationService.GetLocalizedString("StockImageFileIsRequired");
+            return ApiResponse<string>.ErrorResult(m, m, 400);
+        }
+
+        var uploads = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "catalog-product-images", catalogProductId.ToString());
+        Directory.CreateDirectory(uploads);
+
+        var extension = Path.GetExtension(file.FileName);
+        var fileName = $"{Guid.NewGuid():N}{extension}";
+        var fullPath = Path.Combine(uploads, fileName);
+
+        await using var stream = File.Create(fullPath);
+        await file.CopyToAsync(stream, cancellationToken);
+
+        return ApiResponse<string>.SuccessResult(GetCatalogProductImageUrl(fileName, catalogProductId), _localizationService.GetLocalizedString("StockImageUploadedSuccessfully"));
+    }
+
     public async Task<ApiResponse<string>> UploadSteelGoodReciptAcceptanseInspectionPhotoAsync(IFormFile file, long lineId, CancellationToken cancellationToken = default)
     {
         if (file == null || file.Length == 0)
@@ -133,6 +154,11 @@ public sealed class FileUploadService : IFileUploadService
     public string GetStockImageUrl(string fileName, long stockId)
     {
         return $"/stock-images/{stockId}/{fileName}";
+    }
+
+    public string GetCatalogProductImageUrl(string fileName, long catalogProductId)
+    {
+        return $"/catalog-product-images/{catalogProductId}/{fileName}";
     }
 
     public string GetSteelGoodReciptAcceptanseInspectionPhotoUrl(string fileName, long lineId)

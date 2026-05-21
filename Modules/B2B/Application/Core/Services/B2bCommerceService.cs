@@ -30,6 +30,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
     private readonly IRepository<QuoteRequest> _quotes;
     private readonly IRepository<InventorySnapshot> _inventory;
     private readonly IB2bPricingAvailabilityResolver _pricingAvailabilityResolver;
+    private readonly IFileUploadService _fileUploadService;
     private readonly IUnitOfWork _unitOfWork;
 
     public B2bCommerceService(
@@ -53,6 +54,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
         IRepository<QuoteRequest> quotes,
         IRepository<InventorySnapshot> inventory,
         IB2bPricingAvailabilityResolver pricingAvailabilityResolver,
+        IFileUploadService fileUploadService,
         IUnitOfWork unitOfWork)
     {
         _catalogProducts = catalogProducts;
@@ -75,6 +77,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
         _quotes = quotes;
         _inventory = inventory;
         _pricingAvailabilityResolver = pricingAvailabilityResolver;
+        _fileUploadService = fileUploadService;
         _unitOfWork = unitOfWork;
     }
 
@@ -559,6 +562,73 @@ public sealed class B2bCommerceService : IB2bCommerceService
         product.SetUpdatedInfo();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return ApiResponse<CatalogProductMediaDto>.SuccessResult(MapCatalogProductMedia(entity), "Catalog product media saved successfully");
+    }
+
+    public async Task<ApiResponse<List<CatalogProductMediaDto>>> UploadCatalogProductMediaAsync(long productId, UploadCatalogProductMediaDto dto, CancellationToken cancellationToken = default)
+    {
+        if (dto.Files == null || dto.Files.Count == 0)
+        {
+            return ApiResponse<List<CatalogProductMediaDto>>.ErrorResult("At least one image file is required", statusCode: 400);
+        }
+
+        var product = await _catalogProducts.Query(tracking: true).FirstOrDefaultAsync(x => x.Id == productId && !x.IsDeleted, cancellationToken);
+        if (product == null) return ApiResponse<List<CatalogProductMediaDto>>.ErrorResult("Catalog product not found", statusCode: 404);
+
+        await _unitOfWork.BeginTransactionAsync(cancellationToken);
+        try
+        {
+            var nextSortOrder = await _catalogProductMedia.Query()
+                .Where(x => x.CatalogProductId == productId && !x.IsDeleted)
+                .Select(x => (int?)x.SortOrder)
+                .MaxAsync(cancellationToken) ?? 0;
+            var hasPrimary = await _catalogProductMedia.Query()
+                .AnyAsync(x => x.CatalogProductId == productId && x.IsPrimary && !x.IsDeleted, cancellationToken);
+
+            var created = new List<CatalogProductMedia>();
+            for (var index = 0; index < dto.Files.Count; index++)
+            {
+                var upload = await _fileUploadService.UploadCatalogProductImageAsync(dto.Files[index], productId, cancellationToken);
+                if (!upload.Success || string.IsNullOrWhiteSpace(upload.Data))
+                {
+                    await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+                    return ApiResponse<List<CatalogProductMediaDto>>.ErrorResult(upload.Message, upload.ExceptionMessage, upload.StatusCode);
+                }
+
+                nextSortOrder++;
+                var isPrimary = dto.FirstImageAsPrimary && !hasPrimary && index == 0;
+                var media = new CatalogProductMedia
+                {
+                    CatalogProductId = productId,
+                    BranchCode = product.BranchCode,
+                    Url = upload.Data!,
+                    MediaType = "Image",
+                    AltText = dto.AltTexts != null && index < dto.AltTexts.Count && !string.IsNullOrWhiteSpace(dto.AltTexts[index]) ? dto.AltTexts[index].Trim() : product.Name,
+                    IsPrimary = isPrimary,
+                    SortOrder = nextSortOrder,
+                    CreatedDate = DateTimeProvider.Now
+                };
+                await _catalogProductMedia.AddAsync(media, cancellationToken);
+                created.Add(media);
+
+                if (isPrimary)
+                {
+                    hasPrimary = true;
+                    product.PrimaryImageUrl = media.Url;
+                }
+            }
+
+            product.CompletenessScore = CalculateCatalogCompleteness(product);
+            product.SearchText = BuildSearchText(product);
+            product.SetUpdatedInfo();
+            await _unitOfWork.SaveChangesAsync(cancellationToken);
+            await _unitOfWork.CommitTransactionAsync(cancellationToken);
+            return ApiResponse<List<CatalogProductMediaDto>>.SuccessResult(created.Select(MapCatalogProductMedia).ToList(), "Catalog product media uploaded successfully");
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync(cancellationToken);
+            return ApiResponse<List<CatalogProductMediaDto>>.ErrorResult("Catalog product media upload failed", ex.Message, 500);
+        }
     }
 
     public async Task<ApiResponse<CatalogProductDocumentDto>> UpsertCatalogProductDocumentAsync(long productId, UpsertCatalogProductDocumentDto dto, CancellationToken cancellationToken = default)

@@ -19,6 +19,7 @@ public interface IB2bCommerceService
     Task<ApiResponse<CatalogAttributeDefinitionDto>> CreateCatalogAttributeDefinitionAsync(CreateCatalogAttributeDefinitionDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<CatalogProductAttributeDto>> UpsertCatalogProductAttributeAsync(long productId, UpsertCatalogProductAttributeDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<CatalogProductMediaDto>> UpsertCatalogProductMediaAsync(long productId, UpsertCatalogProductMediaDto dto, CancellationToken cancellationToken = default);
+    Task<ApiResponse<List<CatalogProductMediaDto>>> UploadCatalogProductMediaAsync(long productId, UploadCatalogProductMediaDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<CatalogProductDocumentDto>> UpsertCatalogProductDocumentAsync(long productId, UpsertCatalogProductDocumentDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<PagedResponse<CustomerProductAliasDto>>> GetAliasesAsync(PagedRequest request, long? customerId = null, CancellationToken cancellationToken = default);
     Task<ApiResponse<CustomerProductAliasDto>> CreateAliasAsync(CreateCustomerProductAliasDto dto, CancellationToken cancellationToken = default);

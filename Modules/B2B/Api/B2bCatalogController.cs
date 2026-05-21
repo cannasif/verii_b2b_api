@@ -133,6 +133,14 @@ public sealed class B2bCatalogController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
+    [HttpPost("{productId:long}/media/upload")]
+    [Consumes("multipart/form-data")]
+    public async Task<ActionResult<ApiResponse<List<CatalogProductMediaDto>>>> UploadProductMedia(long productId, [FromForm] UploadCatalogProductMediaDto dto, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.UploadCatalogProductMediaAsync(productId, dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
     [HttpPost("{productId:long}/documents")]
     public async Task<ActionResult<ApiResponse<CatalogProductDocumentDto>>> UpsertProductDocument(long productId, [FromBody] UpsertCatalogProductDocumentDto dto, CancellationToken cancellationToken = default)
     {

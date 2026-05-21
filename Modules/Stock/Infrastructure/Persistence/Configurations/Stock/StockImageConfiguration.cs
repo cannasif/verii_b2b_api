@@ -9,7 +9,7 @@ public sealed class StockImageConfiguration : BaseEntityConfiguration<StockImage
 {
     protected override void ConfigureEntity(EntityTypeBuilder<StockImage> builder)
     {
-        builder.ToTable("RII_WMS_STOCK_IMAGE");
+        builder.ToTable("RII_STOCK_IMAGE");
 
         builder.Property(x => x.FilePath).HasMaxLength(500).IsRequired();
         builder.Property(x => x.AltText).HasMaxLength(250);
