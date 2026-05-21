@@ -46,6 +46,8 @@ public sealed class WmsDbContext : DbContext
     public DbSet<CatalogProductAttribute> CatalogProductAttributes => Set<CatalogProductAttribute>();
     public DbSet<CatalogProductMedia> CatalogProductMedia => Set<CatalogProductMedia>();
     public DbSet<CatalogProductDocument> CatalogProductDocuments => Set<CatalogProductDocument>();
+    public DbSet<CatalogProductFavorite> CatalogProductFavorites => Set<CatalogProductFavorite>();
+    public DbSet<CatalogCategoryFavorite> CatalogCategoryFavorites => Set<CatalogCategoryFavorite>();
     public DbSet<CustomerProductAlias> CustomerProductAliases => Set<CustomerProductAlias>();
     public DbSet<B2bCart> B2bCarts => Set<B2bCart>();
     public DbSet<B2bCartLine> B2bCartLines => Set<B2bCartLine>();

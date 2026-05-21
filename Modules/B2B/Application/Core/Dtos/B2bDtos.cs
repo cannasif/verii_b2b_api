@@ -139,6 +139,71 @@ public sealed class CatalogCategoryDto : BaseEntityDto
     public bool IsActive { get; set; }
 }
 
+public sealed class CatalogProductFavoriteDto : BaseEntityDto
+{
+    public long CompanyId { get; set; }
+    public string? CompanyName { get; set; }
+    public long? BuyerId { get; set; }
+    public string? BuyerName { get; set; }
+    public long? UserId { get; set; }
+    public long? CatalogProductId { get; set; }
+    public long? CatalogVariantId { get; set; }
+    public long? ErpStockId { get; set; }
+    public string FavoriteKey { get; set; } = string.Empty;
+    public string? Sku { get; set; }
+    public string? ProductName { get; set; }
+    public string? ProductImageUrl { get; set; }
+    public string? Brand { get; set; }
+    public string? CategoryPath { get; set; }
+    public string? VariantName { get; set; }
+    public string? Note { get; set; }
+}
+
+public sealed class CatalogCategoryFavoriteDto : BaseEntityDto
+{
+    public long CompanyId { get; set; }
+    public string? CompanyName { get; set; }
+    public long? BuyerId { get; set; }
+    public string? BuyerName { get; set; }
+    public long? UserId { get; set; }
+    public long CatalogCategoryId { get; set; }
+    public string? CategoryCode { get; set; }
+    public string? CategoryName { get; set; }
+    public string? CategoryFullPath { get; set; }
+    public string? ImageUrl { get; set; }
+    public string? Note { get; set; }
+}
+
+public sealed class ToggleCatalogProductFavoriteDto
+{
+    public long CompanyId { get; set; }
+    public long? BuyerId { get; set; }
+    public long? UserId { get; set; }
+    public long? CatalogProductId { get; set; }
+    public long? CatalogVariantId { get; set; }
+    public long? ErpStockId { get; set; }
+    [StringLength(80)] public string? Sku { get; set; }
+    public bool? IsFavorite { get; set; }
+    [StringLength(500)] public string? Note { get; set; }
+}
+
+public sealed class ToggleCatalogCategoryFavoriteDto
+{
+    public long CompanyId { get; set; }
+    public long? BuyerId { get; set; }
+    public long? UserId { get; set; }
+    public long CatalogCategoryId { get; set; }
+    public bool? IsFavorite { get; set; }
+    [StringLength(500)] public string? Note { get; set; }
+}
+
+public sealed class CatalogFavoriteToggleResultDto
+{
+    public bool IsFavorite { get; set; }
+    public long? FavoriteId { get; set; }
+    public string FavoriteKey { get; set; } = string.Empty;
+}
+
 public sealed class CreateCatalogCategoryDto
 {
     public long? ParentCategoryId { get; set; }

@@ -18,7 +18,11 @@ public sealed class B2bCommerceService : IB2bCommerceService
     private readonly IRepository<CatalogProductAttribute> _catalogProductAttributes;
     private readonly IRepository<CatalogProductMedia> _catalogProductMedia;
     private readonly IRepository<CatalogProductDocument> _catalogProductDocuments;
+    private readonly IRepository<CatalogProductFavorite> _catalogProductFavorites;
+    private readonly IRepository<CatalogCategoryFavorite> _catalogCategoryFavorites;
     private readonly IRepository<CustomerProductAlias> _aliases;
+    private readonly IRepository<B2bCompany> _companies;
+    private readonly IRepository<B2bBuyer> _buyers;
     private readonly IRepository<B2bCart> _carts;
     private readonly IRepository<B2bCartLine> _cartLines;
     private readonly IRepository<B2bOrder> _orders;
@@ -42,7 +46,11 @@ public sealed class B2bCommerceService : IB2bCommerceService
         IRepository<CatalogProductAttribute> catalogProductAttributes,
         IRepository<CatalogProductMedia> catalogProductMedia,
         IRepository<CatalogProductDocument> catalogProductDocuments,
+        IRepository<CatalogProductFavorite> catalogProductFavorites,
+        IRepository<CatalogCategoryFavorite> catalogCategoryFavorites,
         IRepository<CustomerProductAlias> aliases,
+        IRepository<B2bCompany> companies,
+        IRepository<B2bBuyer> buyers,
         IRepository<B2bCart> carts,
         IRepository<B2bCartLine> cartLines,
         IRepository<B2bOrder> orders,
@@ -65,7 +73,11 @@ public sealed class B2bCommerceService : IB2bCommerceService
         _catalogProductAttributes = catalogProductAttributes;
         _catalogProductMedia = catalogProductMedia;
         _catalogProductDocuments = catalogProductDocuments;
+        _catalogProductFavorites = catalogProductFavorites;
+        _catalogCategoryFavorites = catalogCategoryFavorites;
         _aliases = aliases;
+        _companies = companies;
+        _buyers = buyers;
         _carts = carts;
         _cartLines = cartLines;
         _orders = orders;
@@ -399,6 +411,205 @@ public sealed class B2bCommerceService : IB2bCommerceService
         _catalogCategories.Update(entity);
         await _unitOfWork.SaveChangesAsync(cancellationToken);
         return ApiResponse<CatalogCategoryDto>.SuccessResult(MapCatalogCategory(entity), "Catalog category updated successfully");
+    }
+
+    public async Task<ApiResponse<PagedResponse<CatalogProductFavoriteDto>>> GetCatalogProductFavoritesAsync(PagedRequest request, long companyId, long? buyerId = null, long? userId = null, CancellationToken cancellationToken = default)
+    {
+        var scopeValidation = await ValidateFavoriteScopeAsync(companyId, buyerId, cancellationToken);
+        if (!scopeValidation.Success)
+        {
+            return ApiResponse<PagedResponse<CatalogProductFavoriteDto>>.ErrorResult(scopeValidation.Message, statusCode: scopeValidation.StatusCode);
+        }
+
+        request ??= new PagedRequest();
+        var query = _catalogProductFavorites.Query()
+            .Include(x => x.Company)
+            .Include(x => x.Buyer)
+            .Include(x => x.CatalogProduct)
+            .Include(x => x.CatalogVariant)
+            .Where(x => x.CompanyId == companyId);
+
+        if (buyerId.HasValue) query = query.Where(x => x.BuyerId == buyerId.Value);
+        if (userId.HasValue) query = query.Where(x => x.UserId == userId.Value);
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search.Trim();
+            query = query.Where(x =>
+                x.FavoriteKey.Contains(search) ||
+                (x.Sku != null && x.Sku.Contains(search)) ||
+                (x.CatalogProduct != null && (x.CatalogProduct.Name.Contains(search) || x.CatalogProduct.Sku.Contains(search))) ||
+                (x.CatalogVariant != null && (x.CatalogVariant.VariantName.Contains(search) || x.CatalogVariant.VariantSku.Contains(search))));
+        }
+
+        query = query.OrderByDescending(x => x.Id);
+        var total = await query.CountAsync(cancellationToken);
+        var pageNumber = request.PageNumber < 1 ? 1 : request.PageNumber;
+        var pageSize = request.PageSize < 1 ? 20 : request.PageSize;
+        var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        return ApiResponse<PagedResponse<CatalogProductFavoriteDto>>.SuccessResult(
+            new PagedResponse<CatalogProductFavoriteDto>(items.Select(MapCatalogProductFavorite).ToList(), total, pageNumber, pageSize),
+            "Catalog product favorites retrieved successfully");
+    }
+
+    public async Task<ApiResponse<CatalogFavoriteToggleResultDto>> ToggleCatalogProductFavoriteAsync(ToggleCatalogProductFavoriteDto dto, CancellationToken cancellationToken = default)
+    {
+        var scopeValidation = await ValidateFavoriteScopeAsync(dto.CompanyId, dto.BuyerId, cancellationToken);
+        if (!scopeValidation.Success)
+        {
+            return ApiResponse<CatalogFavoriteToggleResultDto>.ErrorResult(scopeValidation.Message, statusCode: scopeValidation.StatusCode);
+        }
+
+        var favoriteTarget = await ResolveProductFavoriteTargetAsync(dto, cancellationToken);
+        if (!favoriteTarget.Success)
+        {
+            return ApiResponse<CatalogFavoriteToggleResultDto>.ErrorResult(favoriteTarget.Message, statusCode: favoriteTarget.StatusCode);
+        }
+
+        var target = favoriteTarget.Data!;
+        var favorite = await _catalogProductFavorites.Query(tracking: true, ignoreQueryFilters: true)
+            .FirstOrDefaultAsync(x =>
+                x.CompanyId == dto.CompanyId &&
+                x.BuyerId == dto.BuyerId &&
+                x.UserId == dto.UserId &&
+                x.FavoriteKey == target.FavoriteKey,
+                cancellationToken);
+
+        var shouldFavorite = dto.IsFavorite ?? favorite is null or { IsDeleted: true };
+        if (shouldFavorite)
+        {
+            if (favorite == null)
+            {
+                favorite = new CatalogProductFavorite
+                {
+                    CompanyId = dto.CompanyId,
+                    BuyerId = dto.BuyerId,
+                    UserId = dto.UserId,
+                    CreatedDate = DateTimeProvider.Now
+                };
+                await _catalogProductFavorites.AddAsync(favorite, cancellationToken);
+            }
+
+            favorite.CatalogProductId = target.CatalogProductId;
+            favorite.CatalogVariantId = target.CatalogVariantId;
+            favorite.ErpStockId = target.ErpStockId;
+            favorite.FavoriteKey = target.FavoriteKey;
+            favorite.Sku = target.Sku;
+            favorite.Note = Trim(dto.Note);
+            favorite.IsDeleted = false;
+            favorite.DeletedDate = null;
+            favorite.DeletedBy = null;
+            favorite.SetUpdatedInfo();
+        }
+        else if (favorite != null && !favorite.IsDeleted)
+        {
+            favorite.MarkAsDeleted();
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<CatalogFavoriteToggleResultDto>.SuccessResult(new CatalogFavoriteToggleResultDto
+        {
+            IsFavorite = shouldFavorite,
+            FavoriteId = shouldFavorite ? favorite?.Id : null,
+            FavoriteKey = target.FavoriteKey
+        }, shouldFavorite ? "Catalog product added to favorites" : "Catalog product removed from favorites");
+    }
+
+    public async Task<ApiResponse<PagedResponse<CatalogCategoryFavoriteDto>>> GetCatalogCategoryFavoritesAsync(PagedRequest request, long companyId, long? buyerId = null, long? userId = null, CancellationToken cancellationToken = default)
+    {
+        var scopeValidation = await ValidateFavoriteScopeAsync(companyId, buyerId, cancellationToken);
+        if (!scopeValidation.Success)
+        {
+            return ApiResponse<PagedResponse<CatalogCategoryFavoriteDto>>.ErrorResult(scopeValidation.Message, statusCode: scopeValidation.StatusCode);
+        }
+
+        request ??= new PagedRequest();
+        var query = _catalogCategoryFavorites.Query()
+            .Include(x => x.Company)
+            .Include(x => x.Buyer)
+            .Include(x => x.CatalogCategory)
+            .Where(x => x.CompanyId == companyId);
+
+        if (buyerId.HasValue) query = query.Where(x => x.BuyerId == buyerId.Value);
+        if (userId.HasValue) query = query.Where(x => x.UserId == userId.Value);
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search.Trim();
+            query = query.Where(x =>
+                x.CatalogCategory != null &&
+                (x.CatalogCategory.Name.Contains(search) ||
+                 x.CatalogCategory.Code.Contains(search) ||
+                 (x.CatalogCategory.FullPath != null && x.CatalogCategory.FullPath.Contains(search))));
+        }
+
+        query = query.OrderByDescending(x => x.Id);
+        var total = await query.CountAsync(cancellationToken);
+        var pageNumber = request.PageNumber < 1 ? 1 : request.PageNumber;
+        var pageSize = request.PageSize < 1 ? 20 : request.PageSize;
+        var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        return ApiResponse<PagedResponse<CatalogCategoryFavoriteDto>>.SuccessResult(
+            new PagedResponse<CatalogCategoryFavoriteDto>(items.Select(MapCatalogCategoryFavorite).ToList(), total, pageNumber, pageSize),
+            "Catalog category favorites retrieved successfully");
+    }
+
+    public async Task<ApiResponse<CatalogFavoriteToggleResultDto>> ToggleCatalogCategoryFavoriteAsync(ToggleCatalogCategoryFavoriteDto dto, CancellationToken cancellationToken = default)
+    {
+        var scopeValidation = await ValidateFavoriteScopeAsync(dto.CompanyId, dto.BuyerId, cancellationToken);
+        if (!scopeValidation.Success)
+        {
+            return ApiResponse<CatalogFavoriteToggleResultDto>.ErrorResult(scopeValidation.Message, statusCode: scopeValidation.StatusCode);
+        }
+
+        var categoryExists = await _catalogCategories.Query()
+            .AnyAsync(x => x.Id == dto.CatalogCategoryId && !x.IsDeleted && x.IsActive, cancellationToken);
+        if (!categoryExists)
+        {
+            return ApiResponse<CatalogFavoriteToggleResultDto>.ErrorResult("Catalog category not found", statusCode: 404);
+        }
+
+        var favorite = await _catalogCategoryFavorites.Query(tracking: true, ignoreQueryFilters: true)
+            .FirstOrDefaultAsync(x =>
+                x.CompanyId == dto.CompanyId &&
+                x.BuyerId == dto.BuyerId &&
+                x.UserId == dto.UserId &&
+                x.CatalogCategoryId == dto.CatalogCategoryId,
+                cancellationToken);
+
+        var shouldFavorite = dto.IsFavorite ?? favorite is null or { IsDeleted: true };
+        if (shouldFavorite)
+        {
+            if (favorite == null)
+            {
+                favorite = new CatalogCategoryFavorite
+                {
+                    CompanyId = dto.CompanyId,
+                    BuyerId = dto.BuyerId,
+                    UserId = dto.UserId,
+                    CatalogCategoryId = dto.CatalogCategoryId,
+                    CreatedDate = DateTimeProvider.Now
+                };
+                await _catalogCategoryFavorites.AddAsync(favorite, cancellationToken);
+            }
+
+            favorite.Note = Trim(dto.Note);
+            favorite.IsDeleted = false;
+            favorite.DeletedDate = null;
+            favorite.DeletedBy = null;
+            favorite.SetUpdatedInfo();
+        }
+        else if (favorite != null && !favorite.IsDeleted)
+        {
+            favorite.MarkAsDeleted();
+        }
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<CatalogFavoriteToggleResultDto>.SuccessResult(new CatalogFavoriteToggleResultDto
+        {
+            IsFavorite = shouldFavorite,
+            FavoriteId = shouldFavorite ? favorite?.Id : null,
+            FavoriteKey = $"C:{dto.CatalogCategoryId}"
+        }, shouldFavorite ? "Catalog category added to favorites" : "Catalog category removed from favorites");
     }
 
     public async Task<ApiResponse<CatalogProductCategoryDto>> AssignCatalogProductCategoryAsync(long productId, AssignCatalogProductCategoryDto dto, CancellationToken cancellationToken = default)
@@ -1489,6 +1700,109 @@ public sealed class B2bCommerceService : IB2bCommerceService
         return query.OrderByDescending(x => x.SnapshotDate).FirstOrDefaultAsync(cancellationToken);
     }
 
+    private async Task<ApiResponse<bool>> ValidateFavoriteScopeAsync(long companyId, long? buyerId, CancellationToken cancellationToken)
+    {
+        if (companyId <= 0)
+        {
+            return ApiResponse<bool>.ErrorResult("Company is required for favorites", statusCode: 400);
+        }
+
+        var companyExists = await _companies.Query()
+            .AnyAsync(x => x.Id == companyId && !x.IsDeleted && x.Status == "Active", cancellationToken);
+        if (!companyExists)
+        {
+            return ApiResponse<bool>.ErrorResult("B2B company not found", statusCode: 404);
+        }
+
+        if (!buyerId.HasValue)
+        {
+            return ApiResponse<bool>.SuccessResult(true, "Favorite scope is valid");
+        }
+
+        var buyerExists = await _buyers.Query()
+            .AnyAsync(x => x.Id == buyerId.Value && x.CompanyId == companyId && !x.IsDeleted && x.IsActive, cancellationToken);
+        return buyerExists
+            ? ApiResponse<bool>.SuccessResult(true, "Favorite scope is valid")
+            : ApiResponse<bool>.ErrorResult("B2B buyer not found for company", statusCode: 404);
+    }
+
+    private async Task<ApiResponse<ProductFavoriteTarget>> ResolveProductFavoriteTargetAsync(ToggleCatalogProductFavoriteDto dto, CancellationToken cancellationToken)
+    {
+        if (dto.CatalogVariantId.HasValue)
+        {
+            var variant = await _catalogVariants.Query()
+                .Include(x => x.CatalogProduct)
+                .FirstOrDefaultAsync(x => x.Id == dto.CatalogVariantId.Value && !x.IsDeleted && x.IsActive, cancellationToken);
+            if (variant?.CatalogProduct == null || variant.CatalogProduct.IsDeleted)
+            {
+                return ApiResponse<ProductFavoriteTarget>.ErrorResult("Catalog variant not found", statusCode: 404);
+            }
+
+            return ApiResponse<ProductFavoriteTarget>.SuccessResult(new ProductFavoriteTarget
+            {
+                FavoriteKey = $"V:{variant.Id}",
+                CatalogProductId = variant.CatalogProductId,
+                CatalogVariantId = variant.Id,
+                ErpStockId = variant.ErpStockId,
+                Sku = variant.VariantSku
+            }, "Favorite target resolved");
+        }
+
+        if (dto.CatalogProductId.HasValue)
+        {
+            var product = await _catalogProducts.Query()
+                .FirstOrDefaultAsync(x => x.Id == dto.CatalogProductId.Value && !x.IsDeleted, cancellationToken);
+            if (product == null)
+            {
+                return ApiResponse<ProductFavoriteTarget>.ErrorResult("Catalog product not found", statusCode: 404);
+            }
+
+            return ApiResponse<ProductFavoriteTarget>.SuccessResult(new ProductFavoriteTarget
+            {
+                FavoriteKey = $"P:{product.Id}",
+                CatalogProductId = product.Id,
+                ErpStockId = product.DefaultStockId,
+                Sku = product.Sku
+            }, "Favorite target resolved");
+        }
+
+        if (dto.ErpStockId.HasValue)
+        {
+            return ApiResponse<ProductFavoriteTarget>.SuccessResult(new ProductFavoriteTarget
+            {
+                FavoriteKey = $"S:{dto.ErpStockId.Value}",
+                ErpStockId = dto.ErpStockId,
+                Sku = Trim(dto.Sku)
+            }, "Favorite target resolved");
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Sku))
+        {
+            var sku = Normalize(dto.Sku);
+            var product = await _catalogProducts.Query()
+                .FirstOrDefaultAsync(x => x.Sku == sku && !x.IsDeleted, cancellationToken);
+
+            return ApiResponse<ProductFavoriteTarget>.SuccessResult(new ProductFavoriteTarget
+            {
+                FavoriteKey = $"SKU:{sku}",
+                CatalogProductId = product?.Id,
+                ErpStockId = product?.DefaultStockId,
+                Sku = sku
+            }, "Favorite target resolved");
+        }
+
+        return ApiResponse<ProductFavoriteTarget>.ErrorResult("Product, variant, ERP stock or SKU is required for favorites", statusCode: 400);
+    }
+
+    private sealed class ProductFavoriteTarget
+    {
+        public string FavoriteKey { get; set; } = string.Empty;
+        public long? CatalogProductId { get; set; }
+        public long? CatalogVariantId { get; set; }
+        public long? ErpStockId { get; set; }
+        public string? Sku { get; set; }
+    }
+
     private async Task RefreshCatalogQualityAsync(long productId, CancellationToken cancellationToken)
     {
         var product = await _catalogProducts.Query(tracking: true)
@@ -1578,6 +1892,49 @@ public sealed class B2bCommerceService : IB2bCommerceService
         ColorHex = entity.ColorHex,
         IsLeaf = entity.IsLeaf,
         IsActive = entity.IsActive
+    };
+
+    private static CatalogProductFavoriteDto MapCatalogProductFavorite(CatalogProductFavorite entity) => new()
+    {
+        Id = entity.Id,
+        BranchCode = entity.BranchCode,
+        CreatedDate = entity.CreatedDate,
+        UpdatedDate = entity.UpdatedDate,
+        CompanyId = entity.CompanyId,
+        CompanyName = entity.Company?.CompanyName,
+        BuyerId = entity.BuyerId,
+        BuyerName = entity.Buyer?.FullName,
+        UserId = entity.UserId,
+        CatalogProductId = entity.CatalogProductId,
+        CatalogVariantId = entity.CatalogVariantId,
+        ErpStockId = entity.ErpStockId,
+        FavoriteKey = entity.FavoriteKey,
+        Sku = entity.Sku ?? entity.CatalogVariant?.VariantSku ?? entity.CatalogProduct?.Sku,
+        ProductName = entity.CatalogVariant?.VariantName ?? entity.CatalogProduct?.Name,
+        ProductImageUrl = entity.CatalogProduct?.PrimaryImageUrl,
+        Brand = entity.CatalogProduct?.Brand,
+        CategoryPath = entity.CatalogProduct?.CategoryPath,
+        VariantName = entity.CatalogVariant?.VariantName,
+        Note = entity.Note
+    };
+
+    private static CatalogCategoryFavoriteDto MapCatalogCategoryFavorite(CatalogCategoryFavorite entity) => new()
+    {
+        Id = entity.Id,
+        BranchCode = entity.BranchCode,
+        CreatedDate = entity.CreatedDate,
+        UpdatedDate = entity.UpdatedDate,
+        CompanyId = entity.CompanyId,
+        CompanyName = entity.Company?.CompanyName,
+        BuyerId = entity.BuyerId,
+        BuyerName = entity.Buyer?.FullName,
+        UserId = entity.UserId,
+        CatalogCategoryId = entity.CatalogCategoryId,
+        CategoryCode = entity.CatalogCategory?.Code,
+        CategoryName = entity.CatalogCategory?.Name,
+        CategoryFullPath = entity.CatalogCategory?.FullPath,
+        ImageUrl = entity.CatalogCategory?.ImageUrl,
+        Note = entity.Note
     };
 
     private static CatalogProductCategoryDto MapCatalogProductCategory(CatalogProductCategory entity, CatalogCategory? category) => new()

@@ -98,6 +98,72 @@ public sealed class B2bCatalogController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
+    [HttpPost("favorites/paged")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ApiResponse<PagedResponse<CatalogProductFavoriteDto>>>> GetProductFavorites(
+        [FromBody] PagedRequest request,
+        [FromQuery] long companyId,
+        [FromQuery] long? buyerId,
+        [FromQuery] long? userId,
+        CancellationToken cancellationToken = default)
+    {
+        var validation = await _portalAccess.ValidateRequestAsync(Request, cancellationToken);
+        if (!validation.Success)
+        {
+            return StatusCode(validation.StatusCode, ApiResponse<PagedResponse<CatalogProductFavoriteDto>>.ErrorResult(validation.Message, validation.ExceptionMessage, validation.StatusCode));
+        }
+
+        var result = await _service.GetCatalogProductFavoritesAsync(request, companyId, buyerId, userId, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPost("favorites/toggle")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ApiResponse<CatalogFavoriteToggleResultDto>>> ToggleProductFavorite([FromBody] ToggleCatalogProductFavoriteDto dto, CancellationToken cancellationToken = default)
+    {
+        var validation = await _portalAccess.ValidateRequestAsync(Request, cancellationToken);
+        if (!validation.Success)
+        {
+            return StatusCode(validation.StatusCode, ApiResponse<CatalogFavoriteToggleResultDto>.ErrorResult(validation.Message, validation.ExceptionMessage, validation.StatusCode));
+        }
+
+        var result = await _service.ToggleCatalogProductFavoriteAsync(dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPost("category-favorites/paged")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ApiResponse<PagedResponse<CatalogCategoryFavoriteDto>>>> GetCategoryFavorites(
+        [FromBody] PagedRequest request,
+        [FromQuery] long companyId,
+        [FromQuery] long? buyerId,
+        [FromQuery] long? userId,
+        CancellationToken cancellationToken = default)
+    {
+        var validation = await _portalAccess.ValidateRequestAsync(Request, cancellationToken);
+        if (!validation.Success)
+        {
+            return StatusCode(validation.StatusCode, ApiResponse<PagedResponse<CatalogCategoryFavoriteDto>>.ErrorResult(validation.Message, validation.ExceptionMessage, validation.StatusCode));
+        }
+
+        var result = await _service.GetCatalogCategoryFavoritesAsync(request, companyId, buyerId, userId, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPost("category-favorites/toggle")]
+    [AllowAnonymous]
+    public async Task<ActionResult<ApiResponse<CatalogFavoriteToggleResultDto>>> ToggleCategoryFavorite([FromBody] ToggleCatalogCategoryFavoriteDto dto, CancellationToken cancellationToken = default)
+    {
+        var validation = await _portalAccess.ValidateRequestAsync(Request, cancellationToken);
+        if (!validation.Success)
+        {
+            return StatusCode(validation.StatusCode, ApiResponse<CatalogFavoriteToggleResultDto>.ErrorResult(validation.Message, validation.ExceptionMessage, validation.StatusCode));
+        }
+
+        var result = await _service.ToggleCatalogCategoryFavoriteAsync(dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
     [HttpPost("{productId:long}/categories")]
     public async Task<ActionResult<ApiResponse<CatalogProductCategoryDto>>> AssignCategory(long productId, [FromBody] AssignCatalogProductCategoryDto dto, CancellationToken cancellationToken = default)
     {

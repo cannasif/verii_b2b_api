@@ -14,6 +14,10 @@ public interface IB2bCommerceService
     Task<ApiResponse<PagedResponse<CatalogCategoryDto>>> GetCatalogCategoriesAsync(PagedRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<CatalogCategoryDto>> CreateCatalogCategoryAsync(CreateCatalogCategoryDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<CatalogCategoryDto>> UpdateCatalogCategoryAsync(long id, UpdateCatalogCategoryDto dto, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PagedResponse<CatalogProductFavoriteDto>>> GetCatalogProductFavoritesAsync(PagedRequest request, long companyId, long? buyerId = null, long? userId = null, CancellationToken cancellationToken = default);
+    Task<ApiResponse<CatalogFavoriteToggleResultDto>> ToggleCatalogProductFavoriteAsync(ToggleCatalogProductFavoriteDto dto, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PagedResponse<CatalogCategoryFavoriteDto>>> GetCatalogCategoryFavoritesAsync(PagedRequest request, long companyId, long? buyerId = null, long? userId = null, CancellationToken cancellationToken = default);
+    Task<ApiResponse<CatalogFavoriteToggleResultDto>> ToggleCatalogCategoryFavoriteAsync(ToggleCatalogCategoryFavoriteDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<CatalogProductCategoryDto>> AssignCatalogProductCategoryAsync(long productId, AssignCatalogProductCategoryDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<PagedResponse<CatalogAttributeDefinitionDto>>> GetCatalogAttributeDefinitionsAsync(PagedRequest request, long? categoryId = null, CancellationToken cancellationToken = default);
     Task<ApiResponse<CatalogAttributeDefinitionDto>> CreateCatalogAttributeDefinitionAsync(CreateCatalogAttributeDefinitionDto dto, CancellationToken cancellationToken = default);
