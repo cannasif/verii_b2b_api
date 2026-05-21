@@ -1,4 +1,5 @@
 using Wms.Domain.Entities.Common;
+using Wms.Domain.Entities.Identity;
 
 namespace Wms.Domain.Entities.B2B;
 
@@ -16,6 +17,7 @@ public sealed class CatalogProductFavorite : BaseEntity
 
     public B2bCompany? Company { get; set; }
     public B2bBuyer? Buyer { get; set; }
+    public User? User { get; set; }
     public CatalogProduct? CatalogProduct { get; set; }
     public CatalogVariant? CatalogVariant { get; set; }
 }

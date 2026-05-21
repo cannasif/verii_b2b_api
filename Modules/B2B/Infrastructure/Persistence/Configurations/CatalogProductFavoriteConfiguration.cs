@@ -24,6 +24,11 @@ public sealed class CatalogProductFavoriteConfiguration : BaseEntityConfiguratio
             .HasForeignKey(x => x.BuyerId)
             .OnDelete(DeleteBehavior.Restrict);
 
+        builder.HasOne(x => x.User)
+            .WithMany()
+            .HasForeignKey(x => x.UserId)
+            .OnDelete(DeleteBehavior.Restrict);
+
         builder.HasOne(x => x.CatalogProduct)
             .WithMany()
             .HasForeignKey(x => x.CatalogProductId)
@@ -41,5 +46,7 @@ public sealed class CatalogProductFavoriteConfiguration : BaseEntityConfiguratio
         builder.HasIndex(x => x.CatalogProductId).HasDatabaseName("IX_B2B_ProductFavorite_ProductId");
         builder.HasIndex(x => x.CatalogVariantId).HasDatabaseName("IX_B2B_ProductFavorite_VariantId");
         builder.HasIndex(x => x.ErpStockId).HasDatabaseName("IX_B2B_ProductFavorite_ErpStockId");
+        builder.HasIndex(x => x.UserId).HasDatabaseName("IX_B2B_ProductFavorite_UserId");
+        builder.HasIndex(x => x.IsDeleted).HasDatabaseName("IX_B2B_ProductFavorite_IsDeleted");
     }
 }
