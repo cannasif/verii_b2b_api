@@ -657,6 +657,62 @@ public sealed class PaytrIframeTokenDto
     public bool TestMode { get; set; }
 }
 
+public sealed class PaymentBinLookupRequestDto
+{
+    [Required, StringLength(20)] public string ProviderKey { get; set; } = string.Empty;
+    [Required, StringLength(8, MinimumLength = 6)] public string BinNumber { get; set; } = string.Empty;
+    public decimal? Amount { get; set; }
+    [StringLength(3)] public string CurrencyCode { get; set; } = "TRY";
+    [StringLength(120)] public string? ConversationId { get; set; }
+}
+
+public sealed class PaymentInstallmentOptionsRequestDto
+{
+    [Required, StringLength(20)] public string ProviderKey { get; set; } = string.Empty;
+    [StringLength(8, MinimumLength = 6)] public string? BinNumber { get; set; }
+    [Range(0.01, double.MaxValue)] public decimal Amount { get; set; }
+    [StringLength(3)] public string CurrencyCode { get; set; } = "TRY";
+    [StringLength(120)] public string? ConversationId { get; set; }
+}
+
+public sealed class PaymentBinLookupDto
+{
+    public string ProviderKey { get; set; } = string.Empty;
+    public string BinNumber { get; set; } = string.Empty;
+    public string? CardType { get; set; }
+    public string? CardAssociation { get; set; }
+    public string? CardFamily { get; set; }
+    public string? BankName { get; set; }
+    public string? BankCode { get; set; }
+    public bool? IsCommercial { get; set; }
+    public string? ProviderStatus { get; set; }
+    public string? ConversationId { get; set; }
+    public string? RawResponseJson { get; set; }
+}
+
+public sealed class PaymentInstallmentOptionsDto
+{
+    public string ProviderKey { get; set; } = string.Empty;
+    public string? BinNumber { get; set; }
+    public decimal Amount { get; set; }
+    public string CurrencyCode { get; set; } = "TRY";
+    public string? ProviderStatus { get; set; }
+    public string? ConversationId { get; set; }
+    public PaymentBinLookupDto? Card { get; set; }
+    public List<PaymentInstallmentOptionDto> Options { get; set; } = new();
+    public string? RawResponseJson { get; set; }
+}
+
+public sealed class PaymentInstallmentOptionDto
+{
+    public int InstallmentNumber { get; set; }
+    public decimal InstallmentPrice { get; set; }
+    public decimal TotalPrice { get; set; }
+    public decimal? ProviderRate { get; set; }
+    public decimal? CommissionAmount { get; set; }
+    public bool IsAvailable { get; set; } = true;
+}
+
 public sealed class PaymentOrderDto : BaseEntityDto
 {
     public string PaymentOrderNumber { get; set; } = string.Empty;
