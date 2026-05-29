@@ -50,12 +50,14 @@ public sealed class PaymentProviderOperationExecutor : IPaymentProviderOperation
             return ApiResponse<PaymentProviderOperationDto>.ErrorResult("Ödeme operasyonu bulunamadı.", statusCode: 404);
         }
 
-        if (!string.Equals(operation.Status, B2bWorkflowStatuses.Pending, StringComparison.OrdinalIgnoreCase))
+        if (!string.Equals(operation.Status, B2bWorkflowStatuses.Pending, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(operation.Status, B2bWorkflowStatuses.Failed, StringComparison.OrdinalIgnoreCase))
         {
-            return ApiResponse<PaymentProviderOperationDto>.ErrorResult("Sadece bekleyen ödeme operasyonu gönderilebilir.", statusCode: 400);
+            return ApiResponse<PaymentProviderOperationDto>.ErrorResult("Sadece bekleyen veya hatalı ödeme operasyonu gönderilebilir.", statusCode: 400);
         }
 
         operation.Status = B2bWorkflowStatuses.Processing;
+        operation.ErrorMessage = null;
         operation.SetUpdatedInfo();
         await _unitOfWork.SaveChangesAsync(cancellationToken);
 
@@ -165,15 +167,23 @@ public sealed class PaymentProviderOperationExecutor : IPaymentProviderOperation
         else if (operation.OperationType == "REFUND")
         {
             path = _iyzicoOptions.RefundPath;
-            payload = new
+            var usePaymentLevelRefund = path.Contains("/v2/", StringComparison.OrdinalIgnoreCase);
+            var providerTransactionId = ResolveIyzicoPaymentTransactionId(operation.PaymentTransaction.CallbackPayloadJson);
+            var refundPayload = new Dictionary<string, object?>
             {
-                locale = _iyzicoOptions.Locale,
-                conversationId = operation.IdempotencyKey,
-                paymentTransactionId = paymentId,
-                price = ToInvariant(operation.Amount),
-                ip = requestIp,
-                currency = NormalizeCurrency(operation.CurrencyCode)
+                ["locale"] = _iyzicoOptions.Locale,
+                ["conversationId"] = operation.IdempotencyKey,
+                ["price"] = ToInvariant(operation.Amount),
+                ["ip"] = requestIp,
+                ["currency"] = NormalizeCurrency(operation.CurrencyCode)
             };
+            refundPayload[usePaymentLevelRefund ? "paymentId" : "paymentTransactionId"] = usePaymentLevelRefund ? paymentId : providerTransactionId;
+            payload = refundPayload;
+
+            if (!usePaymentLevelRefund && string.IsNullOrWhiteSpace(providerTransactionId))
+            {
+                return ApiResponse<ProviderOperationResult>.ErrorResult("iyzico kalem bazlı iade için paymentTransactionId bulunamadı. RefundPath /v2/payment/refund olarak kullanılmalı veya callback snapshot içinde paymentTransactionId saklanmalı.", statusCode: 400);
+            }
         }
         else
         {
@@ -271,6 +281,37 @@ public sealed class PaymentProviderOperationExecutor : IPaymentProviderOperation
         request.Headers.TryAddWithoutValidation("Authorization", $"IYZWSv2 apiKey:{_iyzicoOptions.ApiKey}&randomKey:{randomKey}&signature:{signature}");
         request.Headers.TryAddWithoutValidation("x-iyzi-rnd", randomKey);
         return request;
+    }
+
+    private static string? ResolveIyzicoPaymentTransactionId(string? callbackPayloadJson)
+    {
+        if (string.IsNullOrWhiteSpace(callbackPayloadJson))
+        {
+            return null;
+        }
+
+        try
+        {
+            using var json = JsonDocument.Parse(callbackPayloadJson);
+            var root = json.RootElement;
+            if (root.TryGetProperty("itemTransactions", out var itemTransactions) && itemTransactions.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var item in itemTransactions.EnumerateArray())
+                {
+                    var value = GetString(item, "paymentTransactionId");
+                    if (!string.IsNullOrWhiteSpace(value))
+                    {
+                        return value;
+                    }
+                }
+            }
+
+            return GetString(root, "paymentTransactionId");
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private string PaytrHmacBase64(string value)
