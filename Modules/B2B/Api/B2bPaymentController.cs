@@ -13,11 +13,13 @@ public sealed class B2bPaymentController : ControllerBase
 {
     private readonly IB2bCommerceService _service;
     private readonly IB2bPortalAccessService _portalAccess;
+    private readonly IPaymentProviderOperationExecutor _operationExecutor;
 
-    public B2bPaymentController(IB2bCommerceService service, IB2bPortalAccessService portalAccess)
+    public B2bPaymentController(IB2bCommerceService service, IB2bPortalAccessService portalAccess, IPaymentProviderOperationExecutor operationExecutor)
     {
         _service = service;
         _portalAccess = portalAccess;
+        _operationExecutor = operationExecutor;
     }
 
     [HttpPost("paged")]
@@ -118,6 +120,13 @@ public sealed class B2bPaymentController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
+    [HttpPost("operations/{id:long}/execute")]
+    public async Task<ActionResult<ApiResponse<PaymentProviderOperationDto>>> ExecutePaymentProviderOperation(long id, [FromBody] ExecutePaymentProviderOperationDto? dto, CancellationToken cancellationToken = default)
+    {
+        var result = await _operationExecutor.ExecuteAsync(id, dto?.UserIp ?? ResolveRequestIp(), cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
     [HttpPost]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> Create([FromBody] CreatePaymentTransactionDto dto, CancellationToken cancellationToken = default)
     {
@@ -130,5 +139,16 @@ public sealed class B2bPaymentController : ControllerBase
     {
         var result = await _service.UpdatePaymentStatusAsync(id, dto, cancellationToken);
         return StatusCode(result.StatusCode, result);
+    }
+
+    private string ResolveRequestIp()
+    {
+        var forwardedFor = Request.Headers["X-Forwarded-For"].ToString();
+        if (!string.IsNullOrWhiteSpace(forwardedFor))
+        {
+            return forwardedFor.Split(',')[0].Trim();
+        }
+
+        return HttpContext.Connection.RemoteIpAddress?.ToString() ?? "127.0.0.1";
     }
 }

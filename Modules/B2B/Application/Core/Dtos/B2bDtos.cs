@@ -925,3 +925,8 @@ public sealed class CreatePaymentProviderOperationDto
     [StringLength(120)] public string? IdempotencyKey { get; set; }
     [StringLength(1000)] public string? Reason { get; set; }
 }
+
+public sealed class ExecutePaymentProviderOperationDto
+{
+    [StringLength(39)] public string? UserIp { get; set; }
+}

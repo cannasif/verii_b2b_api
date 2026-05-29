@@ -11,6 +11,8 @@ public sealed class IyzicoOptions
     public string InstallmentPath { get; set; } = "/payment/iyzipos/installment";
     public string ThreedsInitializePath { get; set; } = "/payment/3dsecure/initialize";
     public string ThreedsAuthPath { get; set; } = "/payment/3dsecure/auth";
+    public string RefundPath { get; set; } = "/payment/refund";
+    public string CancelPath { get; set; } = "/payment/cancel";
     public string CallbackUrl { get; set; } = string.Empty;
     public string Locale { get; set; } = "tr";
 }

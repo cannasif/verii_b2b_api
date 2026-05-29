@@ -10,6 +10,7 @@ public sealed class PaytrOptions
     public string TokenUrl { get; set; } = "https://www.paytr.com/odeme/api/get-token";
     public string BinLookupUrl { get; set; } = "https://www.paytr.com/odeme/api/bin-detail";
     public string InstallmentRatesUrl { get; set; } = "https://www.paytr.com/odeme/api/taksit-oranlari";
+    public string RefundUrl { get; set; } = "https://www.paytr.com/odeme/iade";
     public string IframeBaseUrl { get; set; } = "https://www.paytr.com/odeme/guvenli";
     public string OkUrl { get; set; } = string.Empty;
     public string FailUrl { get; set; } = string.Empty;

@@ -254,6 +254,7 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IB2bErpTransferJob, B2bErpTransferJob>();
         services.AddHttpClient<IPaytrPaymentService, PaytrPaymentService>();
         services.AddHttpClient<IIyzicoPaymentService, IyzicoPaymentService>();
+        services.AddHttpClient<IPaymentProviderOperationExecutor, PaymentProviderOperationExecutor>();
         services.AddHttpClient<IPaymentProviderLookupService, PaymentProviderLookupService>();
 
         services.AddScoped<IJobService, JobService>();
