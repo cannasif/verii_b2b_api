@@ -112,6 +112,10 @@ recurringJobManager.AddOrUpdate<IB2bErpTransferJob>(
     "b2b-erp-transfer-job",
     job => job.RunAsync(CancellationToken.None),
     app.Environment.IsDevelopment() ? Cron.Yearly() : Cron.Minutely());
+recurringJobManager.AddOrUpdate<ITrendyolMarketplaceSyncJob>(
+    "marketplace-trendyol-sync-job",
+    job => job.RunAsync(CancellationToken.None),
+    app.Environment.IsDevelopment() ? Cron.Yearly() : Cron.Minutely());
 
 app.Logger.LogInformation(
     "Registered recurring ERP mirror jobs with cron '{Cron}' for environment '{EnvironmentName}'.",

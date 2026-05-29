@@ -37,6 +37,7 @@ public sealed class HangfireManualSyncService : IHangfireManualSyncService
             ["warehouse"] = new("warehouse", "ManualSyncJobDisplayNameWarehouse", () => _backgroundJobs.Enqueue<IWarehouseSyncJob>(job => job.RunAsync(CancellationToken.None))),
             ["yapkod"] = new("yapkod", "ManualSyncJobDisplayNameYapKod", () => _backgroundJobs.Enqueue<IYapKodSyncJob>(job => job.RunAsync(CancellationToken.None))),
             ["b2b-erp-transfer"] = new("b2b-erp-transfer", "ManualSyncJobDisplayNameB2bErpTransfer", () => _backgroundJobs.Enqueue<IB2bErpTransferJob>(job => job.RunAsync(CancellationToken.None))),
+            ["marketplace-trendyol"] = new("marketplace-trendyol", "ManualSyncJobDisplayNameMarketplaceTrendyol", () => _backgroundJobs.Enqueue<ITrendyolMarketplaceSyncJob>(job => job.RunAsync(CancellationToken.None))),
         };
     }
 
