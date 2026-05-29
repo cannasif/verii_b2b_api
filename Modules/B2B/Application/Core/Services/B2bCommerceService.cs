@@ -10,6 +10,7 @@ namespace Wms.Application.B2B.Services;
 
 public sealed class B2bCommerceService : IB2bCommerceService
 {
+    private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
     private readonly IRepository<CatalogProduct> _catalogProducts;
     private readonly IRepository<CatalogVariant> _catalogVariants;
     private readonly IRepository<CatalogCategory> _catalogCategories;
@@ -1582,6 +1583,56 @@ public sealed class B2bCommerceService : IB2bCommerceService
         return ApiResponse<PaymentOrderDto>.SuccessResult(MapPaymentOrder(paymentOrder), "Payment order plan updated successfully");
     }
 
+    public async Task<ApiResponse<PaymentOrderDto>> SelectPaymentProviderInstallmentAsync(long id, SelectPaymentProviderInstallmentDto dto, CancellationToken cancellationToken = default)
+    {
+        var paymentOrder = await _paymentOrders.Query(tracking: true)
+            .Include(x => x.Installments.Where(i => !i.IsDeleted))
+            .FirstOrDefaultAsync(x => x.Id == id && !x.IsDeleted, cancellationToken);
+        if (paymentOrder == null)
+        {
+            return ApiResponse<PaymentOrderDto>.ErrorResult("Payment order not found", statusCode: 404);
+        }
+
+        if (paymentOrder.PaidAmount > 0)
+        {
+            return ApiResponse<PaymentOrderDto>.ErrorResult("Paid payment order provider plan cannot be changed", statusCode: 400);
+        }
+
+        var installmentNumber = Math.Max(1, dto.InstallmentNumber);
+        var totalPrice = dto.TotalPrice > 0 ? dto.TotalPrice : paymentOrder.Amount;
+        var dueDate = paymentOrder.DueDate;
+
+        _paymentInstallments.SoftDeleteRange(paymentOrder.Installments.Select(x => x.Id));
+        paymentOrder.Installments.Clear();
+        foreach (var installment in BuildInstallments(totalPrice, dueDate, installmentNumber))
+        {
+            paymentOrder.Installments.Add(installment);
+        }
+
+        paymentOrder.ProviderKey = Normalize(dto.ProviderKey);
+        paymentOrder.PaymentMethod = $"{paymentOrder.ProviderKey} Kart";
+        paymentOrder.ProviderConversationId = Trim(dto.ProviderConversationId);
+        paymentOrder.BinNumber = NormalizeBinOrNull(dto.BinNumber);
+        paymentOrder.CardType = Trim(dto.CardType);
+        paymentOrder.CardAssociation = Trim(dto.CardAssociation);
+        paymentOrder.CardFamily = Trim(dto.CardFamily);
+        paymentOrder.BankName = Trim(dto.BankName);
+        paymentOrder.BankCode = Trim(dto.BankCode);
+        paymentOrder.IsCommercialCard = dto.IsCommercialCard;
+        paymentOrder.InstallmentCount = installmentNumber;
+        paymentOrder.ProviderInstallmentNumber = installmentNumber;
+        paymentOrder.ProviderInstallmentPrice = dto.InstallmentPrice;
+        paymentOrder.ProviderTotalPrice = totalPrice;
+        paymentOrder.ProviderRate = dto.ProviderRate;
+        paymentOrder.ProviderCommissionAmount = dto.ProviderCommissionAmount ?? Math.Max(0, totalPrice - paymentOrder.Amount);
+        paymentOrder.ProviderInstallmentSnapshotJson = dto.ProviderInstallmentSnapshotJson ?? JsonSerializer.Serialize(dto, JsonOptions);
+        paymentOrder.RemainingAmount = Math.Max(0, totalPrice - paymentOrder.PaidAmount);
+        paymentOrder.SetUpdatedInfo();
+
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<PaymentOrderDto>.SuccessResult(MapPaymentOrder(paymentOrder), "Payment provider installment selected successfully");
+    }
+
     private async Task<B2bCart> GetOrCreateDraftCart(long customerId, long? userId, long? buyerId, string currencyCode, CancellationToken cancellationToken)
     {
         var cart = await _carts.Query(tracking: true)
@@ -2166,6 +2217,16 @@ public sealed class B2bCommerceService : IB2bCommerceService
         PaymentTermDays = entity.PaymentTermDays,
         InstallmentCount = entity.InstallmentCount,
         InstallmentPlanJson = entity.InstallmentPlanJson,
+        ProviderConversationId = entity.ProviderConversationId,
+        BinNumber = entity.BinNumber,
+        CardType = entity.CardType,
+        CardAssociation = entity.CardAssociation,
+        CardFamily = entity.CardFamily,
+        BankName = entity.BankName,
+        BankCode = entity.BankCode,
+        IsCommercialCard = entity.IsCommercialCard,
+        ProviderRate = entity.ProviderRate,
+        ProviderCommissionAmount = entity.ProviderCommissionAmount,
         RequestedDate = entity.RequestedDate,
         CompletedDate = entity.CompletedDate
     };
@@ -2192,6 +2253,20 @@ public sealed class B2bCommerceService : IB2bCommerceService
         InstallmentCount = entity.InstallmentCount,
         PaymentMethod = entity.PaymentMethod,
         ProviderKey = entity.ProviderKey,
+        ProviderConversationId = entity.ProviderConversationId,
+        BinNumber = entity.BinNumber,
+        CardType = entity.CardType,
+        CardAssociation = entity.CardAssociation,
+        CardFamily = entity.CardFamily,
+        BankName = entity.BankName,
+        BankCode = entity.BankCode,
+        IsCommercialCard = entity.IsCommercialCard,
+        ProviderInstallmentNumber = entity.ProviderInstallmentNumber,
+        ProviderInstallmentPrice = entity.ProviderInstallmentPrice,
+        ProviderTotalPrice = entity.ProviderTotalPrice,
+        ProviderRate = entity.ProviderRate,
+        ProviderCommissionAmount = entity.ProviderCommissionAmount,
+        ProviderInstallmentSnapshotJson = entity.ProviderInstallmentSnapshotJson,
         Notes = entity.Notes,
         Installments = entity.Installments
             .Where(x => !x.IsDeleted)
@@ -2331,6 +2406,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
 
     private static string Normalize(string value) => value.Trim().ToUpperInvariant();
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? NormalizeBinOrNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : new string(value.Where(char.IsDigit).Take(8).ToArray());
     private static string NormalizeAttributeValue(string value) => value.Trim().ToUpperInvariant();
     private static string BuildCategoryFullPath(CatalogCategory? parent, string name)
     {

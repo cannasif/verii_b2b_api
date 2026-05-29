@@ -606,6 +606,16 @@ public sealed class PaymentTransactionDto : BaseEntityDto
     public short? PaymentTermDays { get; set; }
     public int InstallmentCount { get; set; } = 1;
     public string? InstallmentPlanJson { get; set; }
+    public string? ProviderConversationId { get; set; }
+    public string? BinNumber { get; set; }
+    public string? CardType { get; set; }
+    public string? CardAssociation { get; set; }
+    public string? CardFamily { get; set; }
+    public string? BankName { get; set; }
+    public string? BankCode { get; set; }
+    public bool? IsCommercialCard { get; set; }
+    public decimal? ProviderRate { get; set; }
+    public decimal? ProviderCommissionAmount { get; set; }
     public DateTime? RequestedDate { get; set; }
     public DateTime? CompletedDate { get; set; }
 }
@@ -731,8 +741,41 @@ public sealed class PaymentOrderDto : BaseEntityDto
     public int InstallmentCount { get; set; }
     public string? PaymentMethod { get; set; }
     public string? ProviderKey { get; set; }
+    public string? ProviderConversationId { get; set; }
+    public string? BinNumber { get; set; }
+    public string? CardType { get; set; }
+    public string? CardAssociation { get; set; }
+    public string? CardFamily { get; set; }
+    public string? BankName { get; set; }
+    public string? BankCode { get; set; }
+    public bool? IsCommercialCard { get; set; }
+    public int? ProviderInstallmentNumber { get; set; }
+    public decimal? ProviderInstallmentPrice { get; set; }
+    public decimal? ProviderTotalPrice { get; set; }
+    public decimal? ProviderRate { get; set; }
+    public decimal? ProviderCommissionAmount { get; set; }
+    public string? ProviderInstallmentSnapshotJson { get; set; }
     public string? Notes { get; set; }
     public List<PaymentInstallmentDto> Installments { get; set; } = new();
+}
+
+public sealed class SelectPaymentProviderInstallmentDto
+{
+    [Required, StringLength(20)] public string ProviderKey { get; set; } = string.Empty;
+    [StringLength(120)] public string? ProviderConversationId { get; set; }
+    [StringLength(8, MinimumLength = 6)] public string? BinNumber { get; set; }
+    [StringLength(40)] public string? CardType { get; set; }
+    [StringLength(60)] public string? CardAssociation { get; set; }
+    [StringLength(120)] public string? CardFamily { get; set; }
+    [StringLength(180)] public string? BankName { get; set; }
+    [StringLength(40)] public string? BankCode { get; set; }
+    public bool? IsCommercialCard { get; set; }
+    [Range(1, 36)] public int InstallmentNumber { get; set; } = 1;
+    [Range(0.01, double.MaxValue)] public decimal InstallmentPrice { get; set; }
+    [Range(0.01, double.MaxValue)] public decimal TotalPrice { get; set; }
+    public decimal? ProviderRate { get; set; }
+    public decimal? ProviderCommissionAmount { get; set; }
+    public string? ProviderInstallmentSnapshotJson { get; set; }
 }
 
 public sealed class PaymentInstallmentDto : BaseEntityDto

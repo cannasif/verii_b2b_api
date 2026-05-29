@@ -63,11 +63,12 @@ public sealed class PaytrPaymentService : IPaytrPaymentService
         }
 
         var merchantOid = CreateMerchantOid(order.Id);
-        var amountInKurus = ToMinorUnit(order.GrandTotal);
+        var paymentOrder = await GetOrCreatePaymentOrderAsync(order, "PAYTR", "PayTR iFrame", cancellationToken);
+        var paymentAmount = paymentOrder.ProviderTotalPrice ?? paymentOrder.RemainingAmount;
+        var amountInKurus = ToMinorUnit(paymentAmount);
         var currency = ToPaytrCurrency(order.CurrencyCode);
         var userIp = Trim(dto.UserIp) ?? requestIp;
         var userBasket = CreateBasket(order);
-        var paymentOrder = await GetOrCreatePaymentOrderAsync(order, "PAYTR", "PayTR iFrame", cancellationToken);
         var firstOpenInstallment = paymentOrder.Installments
             .Where(x => !x.IsDeleted && x.Status != B2bWorkflowStatuses.Completed)
             .OrderBy(x => x.InstallmentNumber)
@@ -130,10 +131,20 @@ public sealed class PaytrPaymentService : IPaytrPaymentService
             ProviderKey = "PAYTR",
             ExternalTransactionId = merchantOid,
             Status = B2bWorkflowStatuses.Pending,
-            Amount = order.GrandTotal,
-            ProviderPaymentAmount = order.GrandTotal,
+            Amount = paymentAmount,
+            ProviderPaymentAmount = paymentAmount,
             CurrencyCode = order.CurrencyCode,
             PaymentMethod = "PayTR iFrame",
+            ProviderConversationId = paymentOrder.ProviderConversationId,
+            BinNumber = paymentOrder.BinNumber,
+            CardType = paymentOrder.CardType,
+            CardAssociation = paymentOrder.CardAssociation,
+            CardFamily = paymentOrder.CardFamily,
+            BankName = paymentOrder.BankName,
+            BankCode = paymentOrder.BankCode,
+            IsCommercialCard = paymentOrder.IsCommercialCard,
+            ProviderRate = paymentOrder.ProviderRate,
+            ProviderCommissionAmount = paymentOrder.ProviderCommissionAmount,
             DueDate = firstOpenInstallment?.DueDate ?? paymentOrder.DueDate,
             PaymentTermDays = paymentOrder.PaymentTermDays,
             InstallmentCount = paymentOrder.InstallmentCount,
@@ -150,7 +161,7 @@ public sealed class PaytrPaymentService : IPaytrPaymentService
             MerchantOid = merchantOid,
             IframeToken = iframeToken,
             IframeUrl = $"{_options.IframeBaseUrl.TrimEnd('/')}/{iframeToken}",
-            Amount = order.GrandTotal,
+            Amount = paymentAmount,
             CurrencyCode = order.CurrencyCode,
             TestMode = _options.TestMode
         }, "PayTR iFrame token oluşturuldu.");

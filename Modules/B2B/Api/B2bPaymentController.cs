@@ -46,6 +46,13 @@ public sealed class B2bPaymentController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
+    [HttpPut("orders/{id:long}/provider-installment")]
+    public async Task<ActionResult<ApiResponse<PaymentOrderDto>>> SelectProviderInstallment(long id, [FromBody] SelectPaymentProviderInstallmentDto dto, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.SelectPaymentProviderInstallmentAsync(id, dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
     [HttpPost]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> Create([FromBody] CreatePaymentTransactionDto dto, CancellationToken cancellationToken = default)
     {

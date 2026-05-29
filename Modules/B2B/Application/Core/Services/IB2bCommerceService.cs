@@ -44,4 +44,5 @@ public interface IB2bCommerceService
     Task<ApiResponse<PagedResponse<PaymentOrderDto>>> GetPaymentOrdersAsync(PagedRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<PaymentOrderDto>> CreatePaymentOrderAsync(CreatePaymentOrderDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<PaymentOrderDto>> UpdatePaymentOrderPlanAsync(long id, UpdatePaymentOrderPlanDto dto, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PaymentOrderDto>> SelectPaymentProviderInstallmentAsync(long id, SelectPaymentProviderInstallmentDto dto, CancellationToken cancellationToken = default);
 }

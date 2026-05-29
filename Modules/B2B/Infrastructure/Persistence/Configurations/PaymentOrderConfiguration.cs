@@ -18,11 +18,24 @@ public sealed class PaymentOrderConfiguration : BaseEntityConfiguration<PaymentO
         builder.Property(x => x.RemainingAmount).HasPrecision(18, 4);
         builder.Property(x => x.PaymentMethod).HasMaxLength(80);
         builder.Property(x => x.ProviderKey).HasMaxLength(80);
+        builder.Property(x => x.ProviderConversationId).HasMaxLength(120);
+        builder.Property(x => x.BinNumber).HasMaxLength(8);
+        builder.Property(x => x.CardType).HasMaxLength(40);
+        builder.Property(x => x.CardAssociation).HasMaxLength(60);
+        builder.Property(x => x.CardFamily).HasMaxLength(120);
+        builder.Property(x => x.BankName).HasMaxLength(180);
+        builder.Property(x => x.BankCode).HasMaxLength(40);
+        builder.Property(x => x.ProviderInstallmentPrice).HasPrecision(18, 4);
+        builder.Property(x => x.ProviderTotalPrice).HasPrecision(18, 4);
+        builder.Property(x => x.ProviderRate).HasPrecision(18, 4);
+        builder.Property(x => x.ProviderCommissionAmount).HasPrecision(18, 4);
+        builder.Property(x => x.ProviderInstallmentSnapshotJson).HasColumnType("nvarchar(max)");
         builder.Property(x => x.Notes).HasMaxLength(1000);
 
         builder.HasIndex(x => x.PaymentOrderNumber).HasDatabaseName("IX_B2B_PaymentOrder_Number").IsUnique().HasFilter("[IsDeleted] = 0");
         builder.HasIndex(x => x.OrderId).HasDatabaseName("IX_B2B_PaymentOrder_OrderId");
         builder.HasIndex(x => new { x.CustomerId, x.Status }).HasDatabaseName("IX_B2B_PaymentOrder_CustomerStatus");
+        builder.HasIndex(x => new { x.ProviderKey, x.BinNumber }).HasDatabaseName("IX_B2B_PaymentOrder_ProviderBin");
 
         builder.HasMany(x => x.Installments)
             .WithOne(x => x.PaymentOrder)
