@@ -33,8 +33,10 @@ public sealed class B2bCommerceService : IB2bCommerceService
     private readonly IRepository<PaymentInstallment> _paymentInstallments;
     private readonly IRepository<PaymentTransaction> _payments;
     private readonly IRepository<PaymentMethodRule> _paymentMethodRules;
+    private readonly IRepository<PaymentProviderOperation> _paymentProviderOperations;
     private readonly IRepository<QuoteRequest> _quotes;
     private readonly IRepository<InventorySnapshot> _inventory;
+    private readonly IRepository<B2bIntegrationEvent> _integrationEvents;
     private readonly IB2bPricingAvailabilityResolver _pricingAvailabilityResolver;
     private readonly IFileUploadService _fileUploadService;
     private readonly IUnitOfWork _unitOfWork;
@@ -62,8 +64,10 @@ public sealed class B2bCommerceService : IB2bCommerceService
         IRepository<PaymentInstallment> paymentInstallments,
         IRepository<PaymentTransaction> payments,
         IRepository<PaymentMethodRule> paymentMethodRules,
+        IRepository<PaymentProviderOperation> paymentProviderOperations,
         IRepository<QuoteRequest> quotes,
         IRepository<InventorySnapshot> inventory,
+        IRepository<B2bIntegrationEvent> integrationEvents,
         IB2bPricingAvailabilityResolver pricingAvailabilityResolver,
         IFileUploadService fileUploadService,
         IUnitOfWork unitOfWork)
@@ -90,8 +94,10 @@ public sealed class B2bCommerceService : IB2bCommerceService
         _paymentInstallments = paymentInstallments;
         _payments = payments;
         _paymentMethodRules = paymentMethodRules;
+        _paymentProviderOperations = paymentProviderOperations;
         _quotes = quotes;
         _inventory = inventory;
+        _integrationEvents = integrationEvents;
         _pricingAvailabilityResolver = pricingAvailabilityResolver;
         _fileUploadService = fileUploadService;
         _unitOfWork = unitOfWork;
@@ -1753,6 +1759,107 @@ public sealed class B2bCommerceService : IB2bCommerceService
         return ApiResponse<List<PaymentMethodOptionDto>>.SuccessResult(options, "Payment methods resolved successfully");
     }
 
+    public async Task<ApiResponse<PagedResponse<PaymentProviderOperationDto>>> GetPaymentProviderOperationsAsync(PagedRequest request, CancellationToken cancellationToken = default)
+    {
+        request ??= new PagedRequest();
+        var query = _paymentProviderOperations.Query().Where(x => !x.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search.Trim();
+            query = query.Where(x =>
+                x.ProviderKey.Contains(search) ||
+                x.OperationType.Contains(search) ||
+                x.Status.Contains(search) ||
+                (x.ExternalOperationId != null && x.ExternalOperationId.Contains(search)) ||
+                (x.Reason != null && x.Reason.Contains(search)));
+        }
+
+        query = query.OrderByDescending(x => x.Id);
+        var total = await query.CountAsync(cancellationToken);
+        var pageNumber = request.PageNumber < 1 ? 1 : request.PageNumber;
+        var pageSize = request.PageSize < 1 ? 20 : request.PageSize;
+        var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+        return ApiResponse<PagedResponse<PaymentProviderOperationDto>>.SuccessResult(
+            new PagedResponse<PaymentProviderOperationDto>(items.Select(MapPaymentProviderOperation).ToList(), total, pageNumber, pageSize),
+            "Payment provider operations retrieved successfully");
+    }
+
+    public async Task<ApiResponse<PaymentProviderOperationDto>> CreatePaymentProviderOperationAsync(CreatePaymentProviderOperationDto dto, CancellationToken cancellationToken = default)
+    {
+        var operationType = Normalize(dto.OperationType);
+        if (operationType is not ("REFUND" or "CANCEL" or "PARTIAL_PAYMENT" or "RECONCILIATION"))
+        {
+            return ApiResponse<PaymentProviderOperationDto>.ErrorResult("Unsupported payment operation type", statusCode: 400);
+        }
+
+        var payment = await _payments.Query()
+            .FirstOrDefaultAsync(x => x.Id == dto.PaymentTransactionId && !x.IsDeleted, cancellationToken);
+        if (payment is null)
+        {
+            return ApiResponse<PaymentProviderOperationDto>.ErrorResult("Payment transaction not found", statusCode: 404);
+        }
+
+        if (operationType is "REFUND" or "CANCEL" && !string.Equals(payment.Status, B2bWorkflowStatuses.Completed, StringComparison.OrdinalIgnoreCase))
+        {
+            return ApiResponse<PaymentProviderOperationDto>.ErrorResult("Only completed payments can be refunded or cancelled", statusCode: 400);
+        }
+
+        var maxAmount = payment.ProviderCollectedAmount ?? payment.Amount;
+        if (operationType is "REFUND" or "PARTIAL_PAYMENT" && dto.Amount > maxAmount)
+        {
+            return ApiResponse<PaymentProviderOperationDto>.ErrorResult("Operation amount cannot exceed payment amount", statusCode: 400);
+        }
+
+        var idempotencyKey = Trim(dto.IdempotencyKey) ?? $"{operationType}:{payment.Id}:{dto.Amount:0.####}:{DateTimeProvider.Now:yyyyMMddHHmmssfff}";
+        var duplicate = await _paymentProviderOperations.Query()
+            .AnyAsync(x => !x.IsDeleted && x.IdempotencyKey == idempotencyKey, cancellationToken);
+        if (duplicate)
+        {
+            return ApiResponse<PaymentProviderOperationDto>.ErrorResult("Payment operation idempotency key already exists", statusCode: 409);
+        }
+
+        var operation = new PaymentProviderOperation
+        {
+            PaymentTransactionId = payment.Id,
+            PaymentOrderId = payment.PaymentOrderId,
+            PaymentInstallmentId = dto.PaymentInstallmentId ?? payment.PaymentInstallmentId,
+            ProviderKey = Normalize(payment.ProviderKey),
+            OperationType = operationType,
+            Status = B2bWorkflowStatuses.Pending,
+            Amount = dto.Amount,
+            CurrencyCode = NormalizeCurrency(dto.CurrencyCode),
+            IdempotencyKey = idempotencyKey,
+            Reason = Trim(dto.Reason),
+            RequestedDate = DateTimeProvider.Now,
+            CreatedDate = DateTimeProvider.Now,
+            UpdatedDate = DateTimeProvider.Now
+        };
+
+        await _paymentProviderOperations.AddAsync(operation, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        await _integrationEvents.AddAsync(new B2bIntegrationEvent
+        {
+            Direction = "Outbound",
+            EventType = $"Payment{operationType.Replace("_", string.Empty, StringComparison.Ordinal)}Requested",
+            EntityName = nameof(PaymentProviderOperation),
+            EntityId = operation.Id,
+            Status = B2bWorkflowStatuses.Pending,
+            PayloadJson = JsonSerializer.Serialize(new
+            {
+                operation.PaymentTransactionId,
+                operation.PaymentOrderId,
+                operation.ProviderKey,
+                operation.OperationType,
+                operation.Amount,
+                operation.CurrencyCode,
+                operation.IdempotencyKey
+            }, JsonOptions),
+            CreatedDate = DateTimeProvider.Now
+        }, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<PaymentProviderOperationDto>.SuccessResult(MapPaymentProviderOperation(operation), "Payment provider operation created successfully");
+    }
+
     private async Task<B2bCart> GetOrCreateDraftCart(long customerId, long? userId, long? buyerId, string currencyCode, CancellationToken cancellationToken)
     {
         var cart = await _carts.Query(tracking: true)
@@ -2430,6 +2537,28 @@ public sealed class B2bCommerceService : IB2bCommerceService
         ValidFrom = entity.ValidFrom,
         ValidTo = entity.ValidTo,
         Notes = entity.Notes
+    };
+
+    private static PaymentProviderOperationDto MapPaymentProviderOperation(PaymentProviderOperation entity) => new()
+    {
+        Id = entity.Id,
+        BranchCode = entity.BranchCode,
+        CreatedDate = entity.CreatedDate,
+        UpdatedDate = entity.UpdatedDate,
+        PaymentTransactionId = entity.PaymentTransactionId,
+        PaymentOrderId = entity.PaymentOrderId,
+        PaymentInstallmentId = entity.PaymentInstallmentId,
+        ProviderKey = entity.ProviderKey,
+        OperationType = entity.OperationType,
+        Status = entity.Status,
+        Amount = entity.Amount,
+        CurrencyCode = entity.CurrencyCode,
+        ExternalOperationId = entity.ExternalOperationId,
+        IdempotencyKey = entity.IdempotencyKey,
+        Reason = entity.Reason,
+        ErrorMessage = entity.ErrorMessage,
+        RequestedDate = entity.RequestedDate,
+        ProcessedDate = entity.ProcessedDate
     };
 
     private static List<PaymentMethodOptionDto> BuildDefaultPaymentMethodOptions() => new()

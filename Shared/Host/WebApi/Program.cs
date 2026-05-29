@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Options;
 using Wms.Application.Common;
 using Wms.Application.Customer.Services;
+using Wms.Application.B2B.Services;
 using Wms.Application.Stock.Services;
 using Wms.Application.Warehouse.Services;
 using Wms.Application.YapKod.Services;
@@ -107,6 +108,10 @@ recurringJobManager.AddOrUpdate<IYapKodSyncJob>(
     "erp-yapkod-sync-job",
     job => job.RunAsync(CancellationToken.None),
     erpMirrorCron);
+recurringJobManager.AddOrUpdate<IB2bErpTransferJob>(
+    "b2b-erp-transfer-job",
+    job => job.RunAsync(CancellationToken.None),
+    app.Environment.IsDevelopment() ? Cron.Yearly() : Cron.Minutely());
 
 app.Logger.LogInformation(
     "Registered recurring ERP mirror jobs with cron '{Cron}' for environment '{EnvironmentName}'.",

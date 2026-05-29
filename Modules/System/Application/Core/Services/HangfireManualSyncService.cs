@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using Hangfire;
+using Wms.Application.B2B.Services;
 using Wms.Application.Common;
 using Wms.Application.Customer.Services;
 using Wms.Application.Stock.Services;
@@ -35,6 +36,7 @@ public sealed class HangfireManualSyncService : IHangfireManualSyncService
             ["stock"] = new("stock", "ManualSyncJobDisplayNameStock", () => _backgroundJobs.Enqueue<IStockSyncJob>(job => job.RunAsync(CancellationToken.None))),
             ["warehouse"] = new("warehouse", "ManualSyncJobDisplayNameWarehouse", () => _backgroundJobs.Enqueue<IWarehouseSyncJob>(job => job.RunAsync(CancellationToken.None))),
             ["yapkod"] = new("yapkod", "ManualSyncJobDisplayNameYapKod", () => _backgroundJobs.Enqueue<IYapKodSyncJob>(job => job.RunAsync(CancellationToken.None))),
+            ["b2b-erp-transfer"] = new("b2b-erp-transfer", "ManualSyncJobDisplayNameB2bErpTransfer", () => _backgroundJobs.Enqueue<IB2bErpTransferJob>(job => job.RunAsync(CancellationToken.None))),
         };
     }
 

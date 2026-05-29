@@ -57,6 +57,7 @@ public sealed class WmsDbContext : DbContext
     public DbSet<PaymentInstallment> PaymentInstallments => Set<PaymentInstallment>();
     public DbSet<PaymentTransaction> PaymentTransactions => Set<PaymentTransaction>();
     public DbSet<PaymentProviderInquiryLog> PaymentProviderInquiryLogs => Set<PaymentProviderInquiryLog>();
+    public DbSet<PaymentProviderOperation> PaymentProviderOperations => Set<PaymentProviderOperation>();
     public DbSet<PaymentMethodRule> PaymentMethodRules => Set<PaymentMethodRule>();
     public DbSet<CustomerPriceList> CustomerPriceLists => Set<CustomerPriceList>();
     public DbSet<CustomerPriceListItem> CustomerPriceListItems => Set<CustomerPriceListItem>();

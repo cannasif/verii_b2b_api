@@ -667,6 +667,39 @@ public sealed class PaytrIframeTokenDto
     public bool TestMode { get; set; }
 }
 
+public sealed class CreateIyzico3dsPaymentDto
+{
+    public long OrderId { get; set; }
+    [Required, EmailAddress, StringLength(100)] public string Email { get; set; } = string.Empty;
+    [Required, StringLength(100)] public string BuyerName { get; set; } = string.Empty;
+    [Required, StringLength(100)] public string BuyerSurname { get; set; } = string.Empty;
+    [Required, StringLength(20)] public string BuyerPhone { get; set; } = string.Empty;
+    [Required, StringLength(400)] public string BuyerAddress { get; set; } = string.Empty;
+    [Required, StringLength(80)] public string City { get; set; } = string.Empty;
+    [Required, StringLength(80)] public string Country { get; set; } = "Türkiye";
+    [Required, StringLength(30)] public string CardHolderName { get; set; } = string.Empty;
+    [Required, StringLength(19)] public string CardNumber { get; set; } = string.Empty;
+    [Required, StringLength(2)] public string ExpireMonth { get; set; } = string.Empty;
+    [Required, StringLength(4)] public string ExpireYear { get; set; } = string.Empty;
+    [Required, StringLength(4)] public string Cvc { get; set; } = string.Empty;
+    public int InstallmentCount { get; set; } = 1;
+    [StringLength(500)] public string? CallbackUrl { get; set; }
+    [StringLength(39)] public string? BuyerIp { get; set; }
+}
+
+public sealed class Iyzico3dsInitializeDto
+{
+    public long PaymentTransactionId { get; set; }
+    public long OrderId { get; set; }
+    public string ConversationId { get; set; } = string.Empty;
+    public string? PaymentId { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public string? ThreeDSHtmlContent { get; set; }
+    public string? PaymentPageUrl { get; set; }
+    public decimal Amount { get; set; }
+    public string CurrencyCode { get; set; } = "TRY";
+}
+
 public sealed class PaymentBinLookupRequestDto
 {
     [Required, StringLength(20)] public string ProviderKey { get; set; } = string.Empty;
@@ -862,4 +895,33 @@ public sealed class PaymentMethodOptionDto
     public bool RequiresApproval { get; set; }
     public bool IsProviderHosted { get; set; }
     public bool IsDeferredPayment { get; set; }
+}
+
+public sealed class PaymentProviderOperationDto : BaseEntityDto
+{
+    public long PaymentTransactionId { get; set; }
+    public long? PaymentOrderId { get; set; }
+    public long? PaymentInstallmentId { get; set; }
+    public string ProviderKey { get; set; } = string.Empty;
+    public string OperationType { get; set; } = string.Empty;
+    public string Status { get; set; } = string.Empty;
+    public decimal Amount { get; set; }
+    public string CurrencyCode { get; set; } = "TRY";
+    public string? ExternalOperationId { get; set; }
+    public string? IdempotencyKey { get; set; }
+    public string? Reason { get; set; }
+    public string? ErrorMessage { get; set; }
+    public DateTime RequestedDate { get; set; }
+    public DateTime? ProcessedDate { get; set; }
+}
+
+public sealed class CreatePaymentProviderOperationDto
+{
+    public long PaymentTransactionId { get; set; }
+    public long? PaymentInstallmentId { get; set; }
+    [Required, StringLength(40)] public string OperationType { get; set; } = string.Empty;
+    [Range(0.01, double.MaxValue)] public decimal Amount { get; set; }
+    [StringLength(3)] public string CurrencyCode { get; set; } = "TRY";
+    [StringLength(120)] public string? IdempotencyKey { get; set; }
+    [StringLength(1000)] public string? Reason { get; set; }
 }

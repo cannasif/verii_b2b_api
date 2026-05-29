@@ -48,4 +48,6 @@ public interface IB2bCommerceService
     Task<ApiResponse<PagedResponse<PaymentMethodRuleDto>>> GetPaymentMethodRulesAsync(PagedRequest request, CancellationToken cancellationToken = default);
     Task<ApiResponse<PaymentMethodRuleDto>> CreatePaymentMethodRuleAsync(CreatePaymentMethodRuleDto dto, CancellationToken cancellationToken = default);
     Task<ApiResponse<List<PaymentMethodOptionDto>>> ResolvePaymentMethodsAsync(ResolvePaymentMethodsDto dto, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PagedResponse<PaymentProviderOperationDto>>> GetPaymentProviderOperationsAsync(PagedRequest request, CancellationToken cancellationToken = default);
+    Task<ApiResponse<PaymentProviderOperationDto>> CreatePaymentProviderOperationAsync(CreatePaymentProviderOperationDto dto, CancellationToken cancellationToken = default);
 }

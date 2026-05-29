@@ -104,6 +104,20 @@ public sealed class B2bPaymentController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
+    [HttpPost("operations/paged")]
+    public async Task<ActionResult<ApiResponse<PagedResponse<PaymentProviderOperationDto>>>> GetPaymentProviderOperations([FromBody] PagedRequest request, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.GetPaymentProviderOperationsAsync(request, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
+    [HttpPost("operations")]
+    public async Task<ActionResult<ApiResponse<PaymentProviderOperationDto>>> CreatePaymentProviderOperation([FromBody] CreatePaymentProviderOperationDto dto, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.CreatePaymentProviderOperationAsync(dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
     [HttpPost]
     public async Task<ActionResult<ApiResponse<PaymentTransactionDto>>> Create([FromBody] CreatePaymentTransactionDto dto, CancellationToken cancellationToken = default)
     {
