@@ -810,3 +810,56 @@ public sealed class UpdatePaymentOrderPlanDto
     [StringLength(80)] public string? ProviderKey { get; set; }
     [StringLength(1000)] public string? Notes { get; set; }
 }
+
+public sealed class PaymentMethodRuleDto : BaseEntityDto
+{
+    public long? CompanyId { get; set; }
+    public long? CustomerId { get; set; }
+    public string? CustomerGroupCode { get; set; }
+    public string ProviderKey { get; set; } = string.Empty;
+    public string PaymentMethod { get; set; } = string.Empty;
+    public string RuleType { get; set; } = "Include";
+    public decimal? MinAmount { get; set; }
+    public decimal? MaxAmount { get; set; }
+    public bool RequiresApproval { get; set; }
+    public bool IsActive { get; set; }
+    public DateTime? ValidFrom { get; set; }
+    public DateTime? ValidTo { get; set; }
+    public string? Notes { get; set; }
+}
+
+public sealed class CreatePaymentMethodRuleDto
+{
+    public long? CompanyId { get; set; }
+    public long? CustomerId { get; set; }
+    [StringLength(80)] public string? CustomerGroupCode { get; set; }
+    [Required, StringLength(20)] public string ProviderKey { get; set; } = string.Empty;
+    [Required, StringLength(80)] public string PaymentMethod { get; set; } = string.Empty;
+    [Required, StringLength(20)] public string RuleType { get; set; } = "Include";
+    public decimal? MinAmount { get; set; }
+    public decimal? MaxAmount { get; set; }
+    public bool RequiresApproval { get; set; }
+    public bool IsActive { get; set; } = true;
+    public DateTime? ValidFrom { get; set; }
+    public DateTime? ValidTo { get; set; }
+    [StringLength(1000)] public string? Notes { get; set; }
+}
+
+public sealed class ResolvePaymentMethodsDto
+{
+    public long CustomerId { get; set; }
+    public long? CompanyId { get; set; }
+    [StringLength(80)] public string? CustomerGroupCode { get; set; }
+    [Range(0, double.MaxValue)] public decimal Amount { get; set; }
+    [StringLength(3)] public string CurrencyCode { get; set; } = "TRY";
+}
+
+public sealed class PaymentMethodOptionDto
+{
+    public string ProviderKey { get; set; } = string.Empty;
+    public string PaymentMethod { get; set; } = string.Empty;
+    public string DisplayName { get; set; } = string.Empty;
+    public bool RequiresApproval { get; set; }
+    public bool IsProviderHosted { get; set; }
+    public bool IsDeferredPayment { get; set; }
+}

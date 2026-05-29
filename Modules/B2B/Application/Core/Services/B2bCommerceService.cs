@@ -32,6 +32,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
     private readonly IRepository<PaymentOrder> _paymentOrders;
     private readonly IRepository<PaymentInstallment> _paymentInstallments;
     private readonly IRepository<PaymentTransaction> _payments;
+    private readonly IRepository<PaymentMethodRule> _paymentMethodRules;
     private readonly IRepository<QuoteRequest> _quotes;
     private readonly IRepository<InventorySnapshot> _inventory;
     private readonly IB2bPricingAvailabilityResolver _pricingAvailabilityResolver;
@@ -60,6 +61,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
         IRepository<PaymentOrder> paymentOrders,
         IRepository<PaymentInstallment> paymentInstallments,
         IRepository<PaymentTransaction> payments,
+        IRepository<PaymentMethodRule> paymentMethodRules,
         IRepository<QuoteRequest> quotes,
         IRepository<InventorySnapshot> inventory,
         IB2bPricingAvailabilityResolver pricingAvailabilityResolver,
@@ -87,6 +89,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
         _paymentOrders = paymentOrders;
         _paymentInstallments = paymentInstallments;
         _payments = payments;
+        _paymentMethodRules = paymentMethodRules;
         _quotes = quotes;
         _inventory = inventory;
         _pricingAvailabilityResolver = pricingAvailabilityResolver;
@@ -1633,6 +1636,123 @@ public sealed class B2bCommerceService : IB2bCommerceService
         return ApiResponse<PaymentOrderDto>.SuccessResult(MapPaymentOrder(paymentOrder), "Payment provider installment selected successfully");
     }
 
+    public async Task<ApiResponse<PagedResponse<PaymentMethodRuleDto>>> GetPaymentMethodRulesAsync(PagedRequest request, CancellationToken cancellationToken = default)
+    {
+        request ??= new PagedRequest();
+        var query = _paymentMethodRules.Query()
+            .Where(x => !x.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var search = request.Search.Trim();
+            query = query.Where(x =>
+                x.ProviderKey.Contains(search) ||
+                x.PaymentMethod.Contains(search) ||
+                (x.CustomerGroupCode != null && x.CustomerGroupCode.Contains(search)) ||
+                (x.Notes != null && x.Notes.Contains(search)));
+        }
+
+        query = query.OrderByDescending(x => x.Id);
+        var total = await query.CountAsync(cancellationToken);
+        var pageNumber = request.PageNumber < 1 ? 1 : request.PageNumber;
+        var pageSize = request.PageSize < 1 ? 20 : request.PageSize;
+        var items = await query.Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync(cancellationToken);
+
+        return ApiResponse<PagedResponse<PaymentMethodRuleDto>>.SuccessResult(
+            new PagedResponse<PaymentMethodRuleDto>(items.Select(MapPaymentMethodRule).ToList(), total, pageNumber, pageSize),
+            "Payment method rules retrieved successfully");
+    }
+
+    public async Task<ApiResponse<PaymentMethodRuleDto>> CreatePaymentMethodRuleAsync(CreatePaymentMethodRuleDto dto, CancellationToken cancellationToken = default)
+    {
+        var providerKey = Normalize(dto.ProviderKey);
+        var paymentMethod = Trim(dto.PaymentMethod);
+        if (string.IsNullOrWhiteSpace(providerKey) || string.IsNullOrWhiteSpace(paymentMethod))
+        {
+            return ApiResponse<PaymentMethodRuleDto>.ErrorResult("Provider and payment method are required", statusCode: 400);
+        }
+
+        if (dto.MinAmount.HasValue && dto.MaxAmount.HasValue && dto.MinAmount.Value > dto.MaxAmount.Value)
+        {
+            return ApiResponse<PaymentMethodRuleDto>.ErrorResult("Minimum amount cannot be greater than maximum amount", statusCode: 400);
+        }
+
+        var ruleType = string.Equals(dto.RuleType, "Exclude", StringComparison.OrdinalIgnoreCase) ? "Exclude" : "Include";
+        var entity = new PaymentMethodRule
+        {
+            CompanyId = dto.CompanyId,
+            CustomerId = dto.CustomerId,
+            CustomerGroupCode = NormalizeOrNull(dto.CustomerGroupCode),
+            ProviderKey = providerKey,
+            PaymentMethod = paymentMethod!,
+            RuleType = ruleType,
+            MinAmount = dto.MinAmount,
+            MaxAmount = dto.MaxAmount,
+            RequiresApproval = dto.RequiresApproval,
+            IsActive = dto.IsActive,
+            ValidFrom = dto.ValidFrom,
+            ValidTo = dto.ValidTo,
+            Notes = Trim(dto.Notes),
+            CreatedDate = DateTimeProvider.Now,
+            UpdatedDate = DateTimeProvider.Now
+        };
+
+        await _paymentMethodRules.AddAsync(entity, cancellationToken);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<PaymentMethodRuleDto>.SuccessResult(MapPaymentMethodRule(entity), "Payment method rule created successfully");
+    }
+
+    public async Task<ApiResponse<List<PaymentMethodOptionDto>>> ResolvePaymentMethodsAsync(ResolvePaymentMethodsDto dto, CancellationToken cancellationToken = default)
+    {
+        if (dto.CustomerId <= 0)
+        {
+            return ApiResponse<List<PaymentMethodOptionDto>>.ErrorResult("Customer is required", statusCode: 400);
+        }
+
+        var company = dto.CompanyId.HasValue
+            ? await _companies.Query().FirstOrDefaultAsync(x => x.Id == dto.CompanyId.Value && !x.IsDeleted, cancellationToken)
+            : await _companies.Query().FirstOrDefaultAsync(x => x.CustomerId == dto.CustomerId && !x.IsDeleted && x.Status != "Passive", cancellationToken);
+        var companyId = dto.CompanyId ?? company?.Id;
+        var groupCode = NormalizeOrNull(dto.CustomerGroupCode) ?? NormalizeOrNull(company?.CustomerGroupCode);
+        var now = DateTimeProvider.Now;
+        var amount = Math.Max(0, dto.Amount);
+
+        var rules = await _paymentMethodRules.Query()
+            .Where(x => !x.IsDeleted && x.IsActive)
+            .Where(x => !x.ValidFrom.HasValue || x.ValidFrom.Value <= now)
+            .Where(x => !x.ValidTo.HasValue || x.ValidTo.Value >= now)
+            .Where(x => !x.MinAmount.HasValue || x.MinAmount.Value <= amount)
+            .Where(x => !x.MaxAmount.HasValue || x.MaxAmount.Value >= amount)
+            .Where(x =>
+                (!x.CompanyId.HasValue && !x.CustomerId.HasValue && x.CustomerGroupCode == null) ||
+                (companyId.HasValue && x.CompanyId == companyId.Value) ||
+                x.CustomerId == dto.CustomerId ||
+                (groupCode != null && x.CustomerGroupCode == groupCode))
+            .ToListAsync(cancellationToken);
+
+        var includedRules = rules
+            .Where(x => string.Equals(x.RuleType, "Include", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        var options = includedRules.Count > 0
+            ? includedRules.Select(x => BuildPaymentMethodOption(x.ProviderKey, x.PaymentMethod, x.RequiresApproval)).ToList()
+            : BuildDefaultPaymentMethodOptions();
+
+        var excluded = rules
+            .Where(x => string.Equals(x.RuleType, "Exclude", StringComparison.OrdinalIgnoreCase))
+            .Select(x => $"{Normalize(x.ProviderKey)}|{Normalize(x.PaymentMethod)}")
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+
+        options = options
+            .Where(x => !excluded.Contains($"{Normalize(x.ProviderKey)}|{Normalize(x.PaymentMethod)}"))
+            .GroupBy(x => $"{Normalize(x.ProviderKey)}|{Normalize(x.PaymentMethod)}", StringComparer.OrdinalIgnoreCase)
+            .Select(x => x.First())
+            .OrderBy(x => x.IsDeferredPayment)
+            .ThenBy(x => x.DisplayName)
+            .ToList();
+
+        return ApiResponse<List<PaymentMethodOptionDto>>.SuccessResult(options, "Payment methods resolved successfully");
+    }
+
     private async Task<B2bCart> GetOrCreateDraftCart(long customerId, long? userId, long? buyerId, string currencyCode, CancellationToken cancellationToken)
     {
         var cart = await _carts.Query(tracking: true)
@@ -2291,6 +2411,59 @@ public sealed class B2bCommerceService : IB2bCommerceService
         Notes = entity.Notes
     };
 
+    private static PaymentMethodRuleDto MapPaymentMethodRule(PaymentMethodRule entity) => new()
+    {
+        Id = entity.Id,
+        BranchCode = entity.BranchCode,
+        CreatedDate = entity.CreatedDate,
+        UpdatedDate = entity.UpdatedDate,
+        CompanyId = entity.CompanyId,
+        CustomerId = entity.CustomerId,
+        CustomerGroupCode = entity.CustomerGroupCode,
+        ProviderKey = entity.ProviderKey,
+        PaymentMethod = entity.PaymentMethod,
+        RuleType = entity.RuleType,
+        MinAmount = entity.MinAmount,
+        MaxAmount = entity.MaxAmount,
+        RequiresApproval = entity.RequiresApproval,
+        IsActive = entity.IsActive,
+        ValidFrom = entity.ValidFrom,
+        ValidTo = entity.ValidTo,
+        Notes = entity.Notes
+    };
+
+    private static List<PaymentMethodOptionDto> BuildDefaultPaymentMethodOptions() => new()
+    {
+        BuildPaymentMethodOption("PAYTR", "CARD", false),
+        BuildPaymentMethodOption("IYZICO", "CARD", false),
+        BuildPaymentMethodOption("OPEN_ACCOUNT", "OPEN_ACCOUNT", true),
+        BuildPaymentMethodOption("PURCHASE_ORDER", "PURCHASE_ORDER", true)
+    };
+
+    private static PaymentMethodOptionDto BuildPaymentMethodOption(string providerKey, string paymentMethod, bool requiresApproval)
+    {
+        var normalizedProvider = Normalize(providerKey);
+        var normalizedMethod = Normalize(paymentMethod);
+        return new PaymentMethodOptionDto
+        {
+            ProviderKey = normalizedProvider,
+            PaymentMethod = normalizedMethod,
+            DisplayName = ResolvePaymentMethodDisplayName(normalizedProvider, normalizedMethod),
+            RequiresApproval = requiresApproval,
+            IsProviderHosted = normalizedProvider is "PAYTR" or "IYZICO",
+            IsDeferredPayment = normalizedMethod is "OPEN_ACCOUNT" or "PURCHASE_ORDER" || normalizedProvider is "OPEN_ACCOUNT" or "PURCHASE_ORDER"
+        };
+    }
+
+    private static string ResolvePaymentMethodDisplayName(string providerKey, string paymentMethod)
+    {
+        if (providerKey == "PAYTR" && paymentMethod == "CARD") return "PayTR ile Kart Ödeme";
+        if (providerKey == "IYZICO" && paymentMethod == "CARD") return "iyzico ile Kart Ödeme";
+        if (providerKey == "OPEN_ACCOUNT") return "Açık Hesap";
+        if (providerKey == "PURCHASE_ORDER") return "Satın Alma Emri";
+        return $"{providerKey} {paymentMethod}".Trim();
+    }
+
     private async Task ApplyPaymentCompletionAsync(PaymentTransaction payment, CancellationToken cancellationToken)
     {
         if (!payment.PaymentOrderId.HasValue)
@@ -2406,6 +2579,7 @@ public sealed class B2bCommerceService : IB2bCommerceService
 
     private static string Normalize(string value) => value.Trim().ToUpperInvariant();
     private static string? Trim(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    private static string? NormalizeOrNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim().ToUpperInvariant();
     private static string? NormalizeBinOrNull(string? value) => string.IsNullOrWhiteSpace(value) ? null : new string(value.Where(char.IsDigit).Take(8).ToArray());
     private static string NormalizeAttributeValue(string value) => value.Trim().ToUpperInvariant();
     private static string BuildCategoryFullPath(CatalogCategory? parent, string name)

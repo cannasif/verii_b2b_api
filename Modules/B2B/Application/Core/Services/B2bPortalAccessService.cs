@@ -18,6 +18,7 @@ public sealed class B2bPortalAccessService : IB2bPortalAccessService
     private readonly IRepository<B2bBuyer> _buyers;
     private readonly IRepository<B2bCart> _carts;
     private readonly IRepository<B2bOrder> _orders;
+    private readonly IRepository<PaymentOrder> _paymentOrders;
     private readonly byte[] _secret;
     private readonly TimeProvider _timeProvider;
 
@@ -26,6 +27,7 @@ public sealed class B2bPortalAccessService : IB2bPortalAccessService
         IRepository<B2bBuyer> buyers,
         IRepository<B2bCart> carts,
         IRepository<B2bOrder> orders,
+        IRepository<PaymentOrder> paymentOrders,
         IConfiguration configuration,
         TimeProvider timeProvider)
     {
@@ -33,6 +35,7 @@ public sealed class B2bPortalAccessService : IB2bPortalAccessService
         _buyers = buyers;
         _carts = carts;
         _orders = orders;
+        _paymentOrders = paymentOrders;
         _timeProvider = timeProvider;
         _secret = Encoding.UTF8.GetBytes(configuration["Jwt:SecretKey"] ?? "YourSuperSecretKeyThatIsAtLeast32CharactersLong!");
     }
@@ -313,6 +316,18 @@ public sealed class B2bPortalAccessService : IB2bPortalAccessService
         }
 
         return ApiResponse<long>.ErrorResult("Bu sipariş için portal erişiminiz yok", statusCode: 403);
+    }
+
+    public async Task<ApiResponse<long>> ValidatePaymentOrderAccessAsync(HttpRequest request, long paymentOrderId, CancellationToken cancellationToken = default)
+    {
+        var paymentOrder = await _paymentOrders.Query()
+            .Where(x => !x.IsDeleted && x.Id == paymentOrderId)
+            .Select(x => new { x.OrderId })
+            .FirstOrDefaultAsync(cancellationToken);
+
+        return paymentOrder is null
+            ? ApiResponse<long>.ErrorResult("Ödeme emri bulunamadı", statusCode: 404)
+            : await ValidateOrderAccessAsync(request, paymentOrder.OrderId, cancellationToken);
     }
 
     private ApiResponse<B2bPortalTokenPayload> ValidateToken(HttpRequest request)
