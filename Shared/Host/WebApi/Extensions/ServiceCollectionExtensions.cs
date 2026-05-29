@@ -57,6 +57,7 @@ public static class ServiceCollectionExtensions
         services.Configure<PaytrOptions>(configuration.GetSection(PaytrOptions.SectionName));
         services.Configure<IyzicoOptions>(configuration.GetSection(IyzicoOptions.SectionName));
         services.Configure<TrendyolMarketplaceOptions>(configuration.GetSection(TrendyolMarketplaceOptions.SectionName));
+        services.Configure<HepsiburadaMarketplaceOptions>(configuration.GetSection(HepsiburadaMarketplaceOptions.SectionName));
         services.AddNetsisIntegrationsModule(configuration);
 
         var corsOptions = configuration.GetSection("Cors").Get<PragmaticCorsOptions>() ?? new PragmaticCorsOptions();
@@ -257,6 +258,9 @@ public static class ServiceCollectionExtensions
         services.AddScoped<ITrendyolMarketplacePayloadMapper, TrendyolMarketplacePayloadMapper>();
         services.AddHttpClient<ITrendyolMarketplaceClient, TrendyolMarketplaceClient>();
         services.AddScoped<ITrendyolMarketplaceSyncJob, TrendyolMarketplaceSyncJob>();
+        services.AddScoped<IHepsiburadaMarketplacePayloadMapper, HepsiburadaMarketplacePayloadMapper>();
+        services.AddHttpClient<IHepsiburadaMarketplaceClient, HepsiburadaMarketplaceClient>();
+        services.AddScoped<IHepsiburadaMarketplaceSyncJob, HepsiburadaMarketplaceSyncJob>();
         services.AddScoped<ITrendyolMarketplaceIntegration, TrendyolMarketplaceIntegration>();
         services.AddScoped<IHepsiburadaMarketplaceIntegration, HepsiburadaMarketplaceIntegration>();
         services.AddScoped<IAmazonMarketplaceIntegration, AmazonMarketplaceIntegration>();
