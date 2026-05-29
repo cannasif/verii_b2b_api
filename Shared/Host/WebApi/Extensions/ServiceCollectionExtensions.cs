@@ -252,6 +252,11 @@ public static class ServiceCollectionExtensions
         services.AddScoped<IB2bPortalAccessService, B2bPortalAccessService>();
         services.AddScoped<IB2bInsightService, B2bInsightService>();
         services.AddScoped<IB2bErpTransferJob, B2bErpTransferJob>();
+        services.AddScoped<IB2bMarketplaceService, B2bMarketplaceService>();
+        services.AddScoped<ITrendyolMarketplaceIntegration, TrendyolMarketplaceIntegration>();
+        services.AddScoped<IHepsiburadaMarketplaceIntegration, HepsiburadaMarketplaceIntegration>();
+        services.AddScoped<IAmazonMarketplaceIntegration, AmazonMarketplaceIntegration>();
+        services.AddScoped<IEtsyMarketplaceIntegration, EtsyMarketplaceIntegration>();
         services.AddHttpClient<IPaytrPaymentService, PaytrPaymentService>();
         services.AddHttpClient<IIyzicoPaymentService, IyzicoPaymentService>();
         services.AddHttpClient<IPaymentProviderOperationExecutor, PaymentProviderOperationExecutor>();

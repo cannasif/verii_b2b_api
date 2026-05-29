@@ -72,6 +72,9 @@ public sealed class WmsDbContext : DbContext
     public DbSet<ShoppingList> ShoppingLists => Set<ShoppingList>();
     public DbSet<ShoppingListLine> ShoppingListLines => Set<ShoppingListLine>();
     public DbSet<PurchaseApprovalRule> PurchaseApprovalRules => Set<PurchaseApprovalRule>();
+    public DbSet<MarketplaceChannel> MarketplaceChannels => Set<MarketplaceChannel>();
+    public DbSet<MarketplaceListing> MarketplaceListings => Set<MarketplaceListing>();
+    public DbSet<MarketplaceSyncEvent> MarketplaceSyncEvents => Set<MarketplaceSyncEvent>();
     public DbSet<WmsAuditLog> WmsAuditLogs => Set<WmsAuditLog>();
     public DbSet<WmsIntegrationLog> WmsIntegrationLogs => Set<WmsIntegrationLog>();
     public DbSet<JobFailureLog> JobFailureLogs => Set<JobFailureLog>();
