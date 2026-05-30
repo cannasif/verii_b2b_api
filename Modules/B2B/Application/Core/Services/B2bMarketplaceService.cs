@@ -98,6 +98,32 @@ public sealed class B2bMarketplaceService : IB2bMarketplaceService
         return ApiResponse<MarketplaceChannelDto>.SuccessResult(ToDto(entity), "Marketplace kanalı oluşturuldu.");
     }
 
+    public async Task<ApiResponse<MarketplaceChannelDto>> UpdateChannelAsync(long id, UpdateMarketplaceChannelDto dto, CancellationToken cancellationToken = default)
+    {
+        var entity = await _channels.Query(tracking: true).FirstOrDefaultAsync(x => !x.IsDeleted && x.Id == id, cancellationToken);
+        if (entity == null)
+        {
+            return ApiResponse<MarketplaceChannelDto>.ErrorResult("Marketplace kanalı bulunamadı.", "Marketplace channel not found.", 404);
+        }
+
+        if (!string.IsNullOrWhiteSpace(dto.Name)) entity.Name = dto.Name.Trim();
+        if (dto.SellerId != null) entity.SellerId = NullIfWhiteSpace(dto.SellerId);
+        if (dto.ApiBaseUrl != null) entity.ApiBaseUrl = NullIfWhiteSpace(dto.ApiBaseUrl);
+        if (!string.IsNullOrWhiteSpace(dto.AuthType)) entity.AuthType = dto.AuthType.Trim();
+        if (!string.IsNullOrWhiteSpace(dto.CredentialsJson)) entity.CredentialsJson = dto.CredentialsJson.Trim();
+        if (dto.SupportsProductCreate.HasValue) entity.SupportsProductCreate = dto.SupportsProductCreate.Value;
+        if (dto.SupportsPriceUpdate.HasValue) entity.SupportsPriceUpdate = dto.SupportsPriceUpdate.Value;
+        if (dto.SupportsStockUpdate.HasValue) entity.SupportsStockUpdate = dto.SupportsStockUpdate.Value;
+        if (dto.SupportsOrderImport.HasValue) entity.SupportsOrderImport = dto.SupportsOrderImport.Value;
+        if (dto.IsActive.HasValue) entity.IsActive = dto.IsActive.Value;
+        if (dto.Notes != null) entity.Notes = NullIfWhiteSpace(dto.Notes);
+        entity.UpdatedDate = DateTimeProvider.Now;
+
+        _channels.Update(entity);
+        await _unitOfWork.SaveChangesAsync(cancellationToken);
+        return ApiResponse<MarketplaceChannelDto>.SuccessResult(ToDto(entity), "Marketplace kanalı güncellendi.");
+    }
+
     public async Task<ApiResponse<PagedResponse<MarketplaceListingDto>>> GetListingsAsync(PagedRequest request, CancellationToken cancellationToken = default)
     {
         request ??= new PagedRequest();
@@ -286,6 +312,7 @@ public sealed class B2bMarketplaceService : IB2bMarketplaceService
         SellerId = entity.SellerId,
         ApiBaseUrl = entity.ApiBaseUrl,
         AuthType = entity.AuthType,
+        CredentialsMasked = string.IsNullOrWhiteSpace(entity.CredentialsJson) ? null : "********",
         SupportsProductCreate = entity.SupportsProductCreate,
         SupportsPriceUpdate = entity.SupportsPriceUpdate,
         SupportsStockUpdate = entity.SupportsStockUpdate,

@@ -23,6 +23,7 @@ public sealed class MarketplaceChannelDto : BaseEntityDto
     public string? SellerId { get; set; }
     public string? ApiBaseUrl { get; set; }
     public string AuthType { get; set; } = string.Empty;
+    public string? CredentialsMasked { get; set; }
     public bool SupportsProductCreate { get; set; }
     public bool SupportsPriceUpdate { get; set; }
     public bool SupportsStockUpdate { get; set; }
@@ -46,6 +47,21 @@ public sealed class CreateMarketplaceChannelDto
     public bool? SupportsStockUpdate { get; set; }
     public bool? SupportsOrderImport { get; set; }
     public bool IsActive { get; set; } = true;
+    [StringLength(1000)] public string? Notes { get; set; }
+}
+
+public sealed class UpdateMarketplaceChannelDto
+{
+    [StringLength(160)] public string? Name { get; set; }
+    [StringLength(120)] public string? SellerId { get; set; }
+    [StringLength(500)] public string? ApiBaseUrl { get; set; }
+    [StringLength(40)] public string? AuthType { get; set; }
+    public string? CredentialsJson { get; set; }
+    public bool? SupportsProductCreate { get; set; }
+    public bool? SupportsPriceUpdate { get; set; }
+    public bool? SupportsStockUpdate { get; set; }
+    public bool? SupportsOrderImport { get; set; }
+    public bool? IsActive { get; set; }
     [StringLength(1000)] public string? Notes { get; set; }
 }
 

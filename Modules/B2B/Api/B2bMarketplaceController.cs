@@ -39,6 +39,13 @@ public sealed class B2bMarketplaceController : ControllerBase
         return StatusCode(result.StatusCode, result);
     }
 
+    [HttpPut("channels/{id:long}")]
+    public async Task<ActionResult<ApiResponse<MarketplaceChannelDto>>> UpdateChannel(long id, [FromBody] UpdateMarketplaceChannelDto dto, CancellationToken cancellationToken = default)
+    {
+        var result = await _service.UpdateChannelAsync(id, dto, cancellationToken);
+        return StatusCode(result.StatusCode, result);
+    }
+
     [HttpPost("listings/paged")]
     public async Task<ActionResult<ApiResponse<PagedResponse<MarketplaceListingDto>>>> GetListings([FromBody] PagedRequest request, CancellationToken cancellationToken = default)
     {
